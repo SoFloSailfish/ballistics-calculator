@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Range Card Builder</title>
+<style>
+  :root {
+    --ink:#14161A; --panel:#1E2124; --edge:#2C3034; --card:#F2EFE6;
+    --cardline:#C9C2AE; --cardink:#1C1A14; --amber:#D9A441; --dim:#8D939A;
+    --red:#C2543F; --text:#E7E4DC;
+    --mono: ui-monospace,'SF Mono','Cascadia Mono',Consolas,Menlo,monospace;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--ink); color:var(--text);
+    font-family: system-ui,-apple-system,'Segoe UI',sans-serif;
+    padding:20px 16px 48px;
+  }
+  .wrap { max-width:1200px; margin:0 auto; }
+  header {
+    display:flex; align-items:baseline; justify-content:space-between;
+    flex-wrap:wrap; gap:8px; margin-bottom:18px;
+    border-bottom:2px solid var(--amber); padding-bottom:12px;
+  }
+  h1 { margin:0; font-size:20px; letter-spacing:.18em; text-transform:uppercase; font-weight:800; }
+  h1 span { color:var(--amber); }
+  header p { margin:4px 0 0; font-size:12px; color:var(--dim); }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; }
+  button {
+    font-family:inherit; font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+    font-weight:700; padding:8px 14px; border-radius:4px; cursor:pointer;
+  }
+  .solid { background:var(--amber); color:#14161A; border:1px solid var(--amber); }
+  .ghost { background:transparent; color:var(--text); border:1px solid var(--edge); }
+  .layout { display:grid; grid-template-columns:340px 1fr; gap:18px; align-items:start; }
+  @media (max-width:900px){ .layout { grid-template-columns:1fr; } }
+
+  section.panel {
+    background:var(--panel); border:1px solid var(--edge); border-radius:6px;
+    padding:14px; display:flex; flex-direction:column; gap:10px; margin-bottom:14px;
+  }
+  section.panel h2 {
+    margin:0; font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--amber); font-weight:700; border-bottom:1px solid var(--edge); padding-bottom:8px;
+  }
+  label.field { display:flex; flex-direction:column; gap:4px; min-width:0; }
+  label.field > span {
+    font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim);
+    font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  label.field > span em { font-style:normal; color:#5B6167; }
+  input[type=number], input[type=text], select, textarea {
+    background:#15181B; border:1px solid var(--edge); border-radius:4px; color:var(--text);
+    font-family:var(--mono); font-size:13px; padding:7px 8px; width:100%;
+  }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--amber); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .hint { margin:0; font-size:11px; color:var(--dim); }
+  .checks { display:flex; gap:16px; font-size:12px; color:var(--dim); }
+  .checks label { display:flex; gap:6px; align-items:center; cursor:pointer; }
+
+  .dope-card {
+    background:var(--card); color:var(--cardink); border-radius:4px;
+    box-shadow:0 12px 40px rgba(0,0,0,.5); padding:22px 24px 18px;
+    font-family:var(--mono); max-width:820px; margin:0 auto;
+  }
+  .card-head {
+    border-bottom:2px solid var(--cardink); padding-bottom:8px; margin-bottom:10px;
+    display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px;
+  }
+  .card-head b { font-size:15px; letter-spacing:.12em; }
+  .card-head time { font-size:11px; }
+  .meta {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:4px 18px; font-size:11.5px; margin-bottom:14px; line-height:1.5;
+  }
+  table.dope { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.dope th {
+    border-bottom:2px solid var(--cardink); border-top:1px solid var(--cardline);
+    padding:6px 4px; font-size:10px; line-height:1.3; white-space:pre; letter-spacing:.06em;
+    text-align:right;
+  }
+  table.dope th:first-child { text-align:left; }
+  table.dope td {
+    padding:5px 4px; text-align:right; border-bottom:1px solid rgba(0,0,0,.08);
+    font-variant-numeric:tabular-nums;
+  }
+  table.dope td:first-child { text-align:left; font-weight:700; }
+  table.dope tr:nth-child(even) td { background:rgba(0,0,0,.045); }
+  td.notes { min-width:100px; }
+  td.notes div { border-bottom:1px solid rgba(0,0,0,.3); height:14px; }
+  .card-foot {
+    margin-top:12px; padding-top:8px; border-top:1px solid var(--cardline);
+    font-size:10.5px; display:flex; flex-wrap:wrap; gap:4px 18px; color:#4A463A;
+  }
+  .card-foot .warn { color:var(--red); }
+  .sub { color:var(--red); }
+  .trans { color:#8a6d1f; }
+  .note-under {
+    max-width:820px; margin:14px auto 0; font-size:11.5px; color:var(--dim); line-height:1.6;
+  }
+  @media print {
+    body { background:#fff !important; padding:0 !important; }
+    .no-print { display:none !important; }
+    .dope-card { box-shadow:none !important; border:1px solid #888; max-width:100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="no-print">
+    <div>
+      <h1>Range Card <span>Builder</span></h1>
+      <p>Point-mass solver · G1/G7 drag · standalone edition</p>
+    </div>
+    <div class="toolbar">
+      <button class="ghost" onclick="exportJson()">Export JSON</button>
+      <button class="ghost" onclick="document.getElementById('importFile').click()">Import JSON</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJson(event)">
+      <button class="solid" onclick="downloadPng()">DOPE PNG</button>
+      <button class="ghost" onclick="downloadBdcPng()">BDC PNG</button>
+      <button class="ghost" onclick="window.print()">Print</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="no-print" id="inputs">
+      <section class="panel">
+        <h2>Profiles</h2>
+        <div class="grid2">
+          <label class="field"><span>Saved profiles</span>
+            <select id="profileSelect" onchange="loadSavedProfile()"></select>
+          </label>
+          <label class="field"><span>Save current as</span>
+            <input type="text" id="profileName" placeholder="e.g. CZ457 Center-X">
+          </label>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="solid" style="flex:1" onclick="saveProfile()">Save</button>
+          <button class="ghost" style="flex:1" onclick="deleteProfile()">Delete</button>
+        </div>
+        <p class="hint">Profiles persist in this browser via localStorage. Use Export/Import JSON to move between devices.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Rifle</h2>
+        <label class="field"><span>Rifle</span><input type="text" id="rifleName"></label>
+        <label class="field"><span>Caliber</span><select id="caliber" onchange="caliberChanged()"></select></label>
+        <label class="field" id="calCustomWrap" style="display:none"><span>Custom caliber</span>
+          <input type="text" id="caliberCustom" oninput="recalc()">
+        </label>
+      </section>
+
+      <section class="panel">
+        <h2>Ammunition</h2>
+        <label class="field" id="presetWrap"><span>Factory load preset <em>· fills fields below</em></span>
+          <select id="ammoPreset" onchange="applyPreset()"></select>
+        </label>
+        <label class="field"><span>Load</span><input type="text" id="ammoName"></label>
+        <div class="grid2">
+          <label class="field"><span>Bullet weight <em>· gr</em></span><input type="number" id="gr" step="1" min="10"></label>
+          <label class="field"><span>Muzzle velocity <em>· fps</em></span><input type="number" id="mv" step="5" min="300"></label>
+          <label class="field"><span>Ballistic coeff.</span><input type="number" id="bc" step="0.001" min="0.05"></label>
+          <label class="field"><span>Drag model</span>
+            <select id="model"><option>G1</option><option>G7</option></select>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Optic</h2>
+        <label class="field"><span>Scope</span><input type="text" id="scopeName"></label>
+        <div class="grid2">
+          <label class="field"><span>Height over bore <em>· in</em></span><input type="number" id="hob" step="0.05" min="0.5"></label>
+          <label class="field"><span>Zero range <em>· yd</em></span><input type="number" id="zero" step="25" min="10"></label>
+          <label class="field"><span>Turret units</span>
+            <select id="unit" onchange="unitChanged()"><option>MIL</option><option>MOA</option></select>
+          </label>
+          <label class="field"><span>Click value</span>
+            <select id="click"></select>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Atmosphere &amp; Wind</h2>
+        <div class="grid2">
+          <label class="field"><span>Temperature <em>· °F</em></span><input type="number" id="temp" step="1"></label>
+          <label class="field"><span>Altitude <em>· ft</em></span><input type="number" id="alt" step="50"></label>
+          <label class="field"><span>Humidity <em>· %</em></span><input type="number" id="rh" step="5" min="0" max="100"></label>
+          <label class="field"><span>Wind speed <em>· mph</em></span><input type="number" id="wind" step="1" min="0"></label>
+          <label class="field"><span>Wind from <em>· o'clock</em></span><input type="number" id="clock" step="1" min="1" max="12"></label>
+        </div>
+        <p class="hint" id="windHint"></p>
+      </section>
+
+      <section class="panel">
+        <h2>Card Range</h2>
+        <div class="grid3">
+          <label class="field"><span>Start <em>· yd</em></span><input type="number" id="start" step="25" min="0"></label>
+          <label class="field"><span>End <em>· yd</em></span><input type="number" id="end" step="25" min="25"></label>
+          <label class="field"><span>Step <em>· yd</em></span><input type="number" id="step" step="5" min="5"></label>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="tof"> Time of flight</label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>BDC / Reticle Card</h2>
+        <div class="checks"><label><input type="checkbox" id="bdcOn"> Show BDC reticle card</label></div>
+        <div class="grid2">
+          <label class="field"><span>Mark spacing <em>· turret unit</em></span><input type="number" id="bdcIncr" step="0.1" min="0.05"></label>
+          <label class="field"><span>Number of marks</span><input type="number" id="bdcCount" step="1" min="1" max="30"></label>
+        </div>
+        <p class="hint">Maps each reticle holdover mark to the range it hits for this load — the inverse of the DOPE card.</p>
+      </section>
+    </div>
+
+    <div>
+      <div class="dope-card" id="card"></div>
+      <div class="dope-card" id="bdcCard" style="margin-top:18px"></div>
+      <p class="note-under no-print">
+        Computed dope is a starting point — true it with real impacts, and chronograph
+        actual muzzle velocity before trusting drops past ~300 yd. ELEV values are
+        corrections to dial or hold up from your zero.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= DRAG TABLES ================= */
+const G1=[[0,.2629],[.05,.2558],[.1,.2487],[.15,.2413],[.2,.2344],[.25,.2278],[.3,.2214],[.35,.2155],[.4,.2104],[.45,.2061],[.5,.2032],[.55,.202],[.6,.2034],[.7,.2165],[.725,.223],[.75,.2313],[.775,.2417],[.8,.2546],[.825,.2706],[.85,.2901],[.875,.3136],[.9,.3415],[.925,.3734],[.95,.4084],[.975,.4448],[1,.4805],[1.025,.5136],[1.05,.5427],[1.075,.5677],[1.1,.5883],[1.125,.6053],[1.15,.6191],[1.2,.6393],[1.25,.6518],[1.3,.6589],[1.35,.6621],[1.4,.6625],[1.45,.6607],[1.5,.6573],[1.55,.6528],[1.6,.6474],[1.65,.6413],[1.7,.6347],[1.75,.628],[1.8,.621],[1.85,.6141],[1.9,.6072],[1.95,.6003],[2,.5934],[2.05,.5867],[2.1,.5804],[2.15,.5743],[2.2,.5685],[2.25,.563],[2.3,.5577],[2.35,.5527],[2.4,.5481],[2.45,.5438],[2.5,.5397],[2.6,.5325],[2.7,.5264],[2.8,.5211],[2.9,.5168],[3,.5133],[3.1,.5105],[3.2,.5084],[3.3,.5067],[3.4,.5054],[3.5,.504],[3.6,.503],[3.7,.5022],[3.8,.5016],[3.9,.501],[4,.5006]];
+const G7=[[0,.1198],[.1,.1196],[.2,.1193],[.3,.1194],[.4,.1193],[.5,.1194],[.6,.1194],[.65,.1197],[.7,.1202],[.725,.1207],[.75,.1215],[.775,.1226],[.8,.1242],[.825,.1266],[.85,.1306],[.875,.1368],[.9,.1464],[.925,.166],[.95,.2054],[.975,.2993],[1,.3803],[1.025,.4015],[1.05,.4043],[1.075,.4034],[1.1,.4014],[1.125,.3987],[1.15,.3955],[1.2,.3884],[1.25,.381],[1.3,.3732],[1.35,.3657],[1.4,.358],[1.5,.344],[1.55,.3376],[1.6,.3315],[1.65,.326],[1.7,.3209],[1.75,.316],[1.8,.3117],[1.85,.3078],[1.9,.3042],[1.95,.301],[2,.298],[2.05,.2951],[2.1,.2922],[2.15,.2892],[2.2,.2864],[2.25,.2835],[2.3,.2807],[2.35,.2779],[2.4,.2752],[2.45,.2725],[2.5,.2697],[2.6,.2643],[2.7,.2588],[2.8,.2533],[2.9,.2479],[3,.2424],[3.1,.2368],[3.2,.2313],[3.3,.2258],[3.4,.2205],[3.5,.2154],[3.6,.2106],[3.7,.206],[3.8,.2017],[3.9,.1975],[4,.1935]];
+
+/* ================= LOAD DATABASE =================
+   BC/MV are manufacturer-published (MV usually from a 24" test barrel).
+   Verify against the box; add your own entries below. */
+const FACTORY_LOADS={
+ ".22 LR":[
+  {name:"SK Standard Plus 40gr LRN",gr:40,bc:.15,model:"G1",mv:1073},
+  {name:"SK Rifle Match 40gr LRN",gr:40,bc:.15,model:"G1",mv:1073},
+  {name:"SK Long Range Match 40gr LRN",gr:40,bc:.15,model:"G1",mv:1106},
+  {name:"Lapua Center-X 40gr LRN",gr:40,bc:.15,model:"G1",mv:1073},
+  {name:"Lapua Midas+ 40gr LRN",gr:40,bc:.15,model:"G1",mv:1073},
+  {name:"Lapua X-ACT 40gr LRN",gr:40,bc:.15,model:"G1",mv:1073},
+  {name:"Lapua Long Range 40gr LRN",gr:40,bc:.15,model:"G1",mv:1106},
+  {name:"Lapua Polar Biathlon 40gr LRN",gr:40,bc:.15,model:"G1",mv:1106},
+  {name:"Eley Tenex 40gr LFN",gr:40,bc:.15,model:"G1",mv:1085},
+  {name:"Eley Match 40gr LFN",gr:40,bc:.15,model:"G1",mv:1085},
+  {name:"Eley Club 40gr LRN",gr:40,bc:.15,model:"G1",mv:1085},
+  {name:"RWS R50 40gr LRN",gr:40,bc:.15,model:"G1",mv:1083},
+  {name:"RWS R100 40gr LRN",gr:40,bc:.15,model:"G1",mv:1083}],
+ ".223 Remington":[
+  {name:"Australian Outback 69gr SMK",gr:69,bc:.301,model:"G1",mv:2959},
+  {name:"Federal Gold Medal 69gr SMK (GM223M)",gr:69,bc:.301,model:"G1",mv:2950},
+  {name:"Federal Gold Medal 77gr SMK (GM223M3)",gr:77,bc:.372,model:"G1",mv:2720},
+  {name:"Hornady Match 73gr ELD",gr:73,bc:.398,model:"G1",mv:2790},
+  {name:"Hornady Match 75gr BTHP",gr:75,bc:.395,model:"G1",mv:2790},
+  {name:"Hornady Varmint Express 55gr V-MAX",gr:55,bc:.255,model:"G1",mv:3240},
+  {name:"Federal American Eagle 55gr FMJ",gr:55,bc:.269,model:"G1",mv:3240}],
+ "5.56 NATO":[
+  {name:"M193 55gr FMJ",gr:55,bc:.246,model:"G1",mv:3250},
+  {name:"M855 62gr FMJ (green tip)",gr:62,bc:.304,model:"G1",mv:3020},
+  {name:"Black Hills Mk262 Mod 1 77gr SMK",gr:77,bc:.372,model:"G1",mv:2750}],
+ ".22-250 Remington":[
+  {name:"Hornady Varmint Express 55gr V-MAX",gr:55,bc:.255,model:"G1",mv:3680}],
+ ".243 Winchester":[
+  {name:"Hornady Precision Hunter 90gr ELD-X",gr:90,bc:.409,model:"G1",mv:3200},
+  {name:"Hornady Match 108gr ELD",gr:108,bc:.536,model:"G1",mv:2960},
+  {name:"Hornady Superformance 95gr SST",gr:95,bc:.355,model:"G1",mv:3185},
+  {name:"Federal Power-Shok 100gr SP",gr:100,bc:.350,model:"G1",mv:2960},
+  {name:"Remington Core-Lokt 100gr PSP",gr:100,bc:.356,model:"G1",mv:2960},
+  {name:"Winchester Deer Season XP 95gr",gr:95,bc:.297,model:"G1",mv:3100}],
+ "6.5 Creedmoor":[
+  {name:"Hornady Match 140gr ELD",gr:140,bc:.646,model:"G1",mv:2710},
+  {name:"Hornady Match 147gr ELD",gr:147,bc:.697,model:"G1",mv:2695},
+  {name:"Hornady Precision Hunter 143gr ELD-X",gr:143,bc:.625,model:"G1",mv:2700},
+  {name:"Federal Gold Medal Berger 130gr Hybrid OTM",gr:130,bc:.562,model:"G1",mv:2875},
+  {name:"Federal Gold Medal 140gr SMK",gr:140,bc:.535,model:"G1",mv:2725},
+  {name:"Lapua Scenar-L 136gr OTM",gr:136,bc:.552,model:"G1",mv:2740},
+  {name:"Nosler Match Grade 140gr RDF",gr:140,bc:.658,model:"G1",mv:2750},
+  {name:"Winchester Match 140gr HPBT",gr:140,bc:.530,model:"G1",mv:2700}],
+ ".308 Winchester":[
+  {name:"Federal Gold Medal 168gr SMK (GM308M)",gr:168,bc:.462,model:"G1",mv:2650},
+  {name:"Federal Gold Medal 175gr SMK",gr:175,bc:.505,model:"G1",mv:2600},
+  {name:"Hornady Match 168gr ELD",gr:168,bc:.523,model:"G1",mv:2700},
+  {name:"M118LR 175gr SMK",gr:175,bc:.505,model:"G1",mv:2580}],
+ ".30-06 Springfield":[
+  {name:"Federal Gold Medal 168gr SMK (GM3006M)",gr:168,bc:.462,model:"G1",mv:2700},
+  {name:"Hornady Precision Hunter 178gr ELD-X",gr:178,bc:.552,model:"G1",mv:2750},
+  {name:"Hornady Superformance 165gr SST",gr:165,bc:.447,model:"G1",mv:2960},
+  {name:"Hornady American Whitetail 150gr InterLock",gr:150,bc:.338,model:"G1",mv:2910},
+  {name:"Nosler Trophy Grade 180gr AccuBond",gr:180,bc:.507,model:"G1",mv:2750},
+  {name:"Federal Power-Shok 180gr SP",gr:180,bc:.383,model:"G1",mv:2700},
+  {name:"Remington Core-Lokt 150gr PSP",gr:150,bc:.314,model:"G1",mv:2910},
+  {name:"Remington Core-Lokt 165gr PSP",gr:165,bc:.339,model:"G1",mv:2800},
+  {name:"Remington Core-Lokt 180gr PSP",gr:180,bc:.383,model:"G1",mv:2700},
+  {name:"Remington Premier AccuTip 165gr BT",gr:165,bc:.447,model:"G1",mv:2800}],
+ ".300 Win Mag":[
+  {name:"Federal Gold Medal 190gr SMK",gr:190,bc:.533,model:"G1",mv:2900}]
+};
+const CALIBERS=[".17 HMR",".204 Ruger",".22 LR",".223 Remington","5.56 NATO",".22-250 Remington",".243 Winchester","6mm Creedmoor","6.5 Creedmoor",".270 Winchester","7mm-08 Remington","7mm Rem Mag",".308 Winchester",".30-06 Springfield",".300 Win Mag",".338 Lapua Mag",".45-70 Govt"];
+const CUSTOM="__custom__";
+
+/* ================= ENGINE ================= */
+const FPS=3.28084, YD=0.9144, INM=39.3701, GRAV=9.80665, BCSI=703.069;
+
+function dragCd(t,m){
+  if(m<=t[0][0])return t[0][1];
+  if(m>=t[t.length-1][0])return t[t.length-1][1];
+  for(let i=1;i<t.length;i++) if(m<=t[i][0]){
+    const[a,b]=t[i-1],[c,d]=t[i]; return b+((m-a)/(c-a))*(d-b);
+  }
+  return t[t.length-1][1];
+}
+function atmosphere(tF,altFt,rhPct){
+  const tK=((tF-32)/1.8)+273.15, tC=tK-273.15;
+  const p=101325*Math.pow(1-6.87535e-6*altFt,5.2559);
+  const es=611.21*Math.exp((17.502*tC)/(240.97+tC));
+  const e=Math.min(1,Math.max(0,rhPct/100))*es;
+  const pd=Math.max(0,p-e);
+  return{rho:pd/(287.058*tK)+e/(461.495*tK), sos:Math.sqrt(1.402*287.058*tK)};
+}
+function integrate(theta,s,env,maxM){
+  const tbl=s.model==="G7"?G7:G1;
+  const k=(Math.PI*env.rho)/(8*BCSI*s.bc);
+  let x=0,y=-s.hob/INM,t=0;
+  const v0=s.mv/FPS;
+  let vx=v0*Math.cos(theta),vy=v0*Math.sin(theta);
+  const dt=0.0004,rec=[];let nextX=0,g=0;
+  while(x<=maxM&&g<2e6){
+    g++;
+    while(x>=nextX&&nextX<=maxM){rec[Math.round(nextX)]={y,v:Math.hypot(vx,vy),t};nextX+=1;}
+    const v=Math.hypot(vx,vy);
+    if(v<30)break;
+    const a=k*dragCd(tbl,v/env.sos)*v;
+    const ax1=-a*vx,ay1=-a*vy-GRAV;
+    const vxm=vx+ax1*dt*.5,vym=vy+ay1*dt*.5;
+    const vm=Math.hypot(vxm,vym);
+    const am=k*dragCd(tbl,vm/env.sos)*vm;
+    x+=vxm*dt;y+=vym*dt;
+    vx+=(-am*vxm)*dt;vy+=(-am*vym-GRAV)*dt;t+=dt;
+    if(y<-300)break;
+  }
+  return rec;
+}
+function solve(s,chart,env){
+  const zeroM=s.zero*YD, maxM=Math.max(zeroM,chart.end*YD,1000*YD)+2;
+  let theta=0.001;
+  for(let i=0;i<6;i++){
+    const rec=integrate(theta,s,env,zeroM+1);
+    const at=rec[Math.round(zeroM)];
+    if(!at)break;
+    theta-=Math.atan2(at.y,zeroM);
+  }
+  const rec=integrate(theta,s,env,maxM);
+  const v0=s.mv/FPS, rows=[];
+  const stepY=Math.max(5,chart.step);
+  for(let r=chart.start;r<=chart.end+.001;r+=stepY){
+    const rm=Math.round(r*YD);
+    const at=rec[Math.min(rm,rec.length-1)];
+    if(!at)continue;
+    const dropIn=at.y*INM, vF=at.v*FPS;
+    const cross=env.crossMph*1.46667;
+    const drift=Math.abs(cross*(at.t-rm/v0))*12;
+    rows.push({
+      r:Math.round(r), vF, e:(s.gr*vF*vF)/450436, dropIn,
+      mil:r>0?(-dropIn/(r*36))*1000:0,
+      moa:r>0?-dropIn/(1.047*(r/100)):0,
+      dIn:drift, dMil:r>0?(drift/(r*36))*1000:0,
+      tof:at.t, mach:at.v/env.sos
+    });
+  }
+  let maxOrd=-1e9,maxOrdYd=0,nearZero=null,sonic=null;
+  const scanEnd=Math.min(rec.length,Math.round(chart.end*YD)+2);
+  for(let m=1;m<scanEnd;m++){
+    const rr=rec[m];if(!rr)continue;
+    const yd=m/YD;
+    if(rr.y>maxOrd){maxOrd=rr.y;maxOrdYd=yd;}
+    if(nearZero===null&&rec[m-1]&&rec[m-1].y<0&&rr.y>=0)nearZero=yd;
+    if(sonic===null&&rr.v/env.sos<1)sonic=yd;
+  }
+  return{rows,rec,sum:{maxOrdIn:maxOrd*INM,maxOrdYd,nearZero,sonic}};
+}
+
+/* Inverse lookup: for each reticle holdover mark (in turret unit), find the
+   range at which that hold puts rounds on target for this load. */
+function buildBdc(rec,s,env,unit,incr,count){
+  const v0=s.mv/FPS;
+  const holdAt=m=>{
+    const rr=rec[m]; if(!rr)return null;
+    const yd=m/YD; if(yd<=0.5)return null;
+    const dropIn=rr.y*INM;
+    return unit==="MOA"?-dropIn/(1.047*(yd/100)):(-dropIn/(yd*36))*1000;
+  };
+  const rowAt=yd=>{
+    const m=Math.min(Math.round(yd*YD),rec.length-1);
+    const rr=rec[m]; if(!rr)return {};
+    const vF=rr.v*FPS, cross=env.crossMph*1.46667;
+    const drift=Math.abs(cross*(rr.t-m/v0))*12;
+    const windU=unit==="MOA"?(yd>0?drift/(1.047*(yd/100)):0):(drift/(yd*36))*1000;
+    return {vF, e:(s.gr*vF*vF)/450436, dropIn:rr.y*INM, driftIn:drift, windU, mach:rr.v/env.sos};
+  };
+  const startM=Math.max(1,Math.round(s.zero*YD));
+  const rows=[{hold:0,rangeYd:s.zero,...rowAt(s.zero)}];
+  for(let i=1;i<=count;i++){
+    const target=incr*i;
+    let found=null;
+    for(let m=startM+1;m<rec.length;m++){
+      const h0=holdAt(m-1),h1=holdAt(m);
+      if(h0===null||h1===null)continue;
+      if(h0<=target&&h1>=target){
+        const f=(target-h0)/((h1-h0)||1);
+        found=(m-1+f)/YD; break;
+      }
+    }
+    rows.push(found!==null?{hold:target,rangeYd:found,...rowAt(found)}:{hold:target,rangeYd:null});
+  }
+  return rows;
+}
+
+/* ================= STATE / UI ================= */
+const $=id=>document.getElementById(id);
+const DEFAULTS={
+  rifleName:'Remington 700 Heavy Varmint 25"', caliber:".223 Remington",
+  ammoName:"Australian Outback 69gr SMK", gr:69, bc:0.301, model:"G1", mv:2959,
+  scopeName:"Bushnell Match Pro 6-24x50", hob:2.0, zero:100,
+  temp:90, alt:10, rh:70, wind:10, clock:3,
+  start:50, end:300, step:50, unit:"MIL", click:0.1, tof:false,
+  bdcOn:true, bdcIncr:0.5, bdcCount:12
+};
+const FIELDS=Object.keys(DEFAULTS);
+const NUMS=["gr","bc","mv","hob","zero","temp","alt","rh","wind","clock","start","end","step","click","bdcIncr","bdcCount"];
+
+function readState(){
+  const s={};
+  FIELDS.forEach(k=>{
+    const el=$(k);
+    if(!el)return;
+    if(el.type==="checkbox")s[k]=el.checked;
+    else s[k]=NUMS.includes(k)?parseFloat(el.value):el.value;
+  });
+  if(s.caliber===CUSTOM)s.caliber=$("caliberCustom").value;
+  // sanitize
+  const n=(v,f)=>isFinite(v)?v:f;
+  s.gr=n(s.gr,69);s.bc=Math.max(.05,n(s.bc,.301));s.mv=Math.max(300,n(s.mv,2959));
+  s.hob=n(s.hob,2);s.zero=Math.max(10,n(s.zero,100));
+  s.temp=n(s.temp,59);s.alt=n(s.alt,0);s.rh=n(s.rh,50);
+  s.wind=n(s.wind,0);s.clock=n(s.clock,3);
+  s.start=Math.max(0,n(s.start,50));
+  s.end=Math.min(2000,Math.max(s.start,n(s.end,300)));
+  s.step=Math.max(5,n(s.step,50));
+  s.click=n(s.click,s.unit==="MOA"?0.25:0.1);
+  s.bdcIncr=Math.max(0.05,n(s.bdcIncr,s.unit==="MOA"?1:0.5));
+  s.bdcCount=Math.max(1,Math.min(30,Math.round(n(s.bdcCount,12))));
+  return s;
+}
+function updateClickOptions(keep){
+  const u=$("unit").value;
+  const opts=u==="MOA"
+    ?[["0.25","1/4 MOA"],["0.125","1/8 MOA"],["0.5","1/2 MOA"]]
+    :[["0.1","0.1 MIL"],["0.05","0.05 MIL"]];
+  $("click").innerHTML=opts.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join("");
+  if(keep!==undefined){
+    $("click").value=String(keep);
+    if($("click").selectedIndex<0)$("click").selectedIndex=0;
+  }
+}
+function unitChanged(){updateClickOptions();$("bdcIncr").value=($("unit").value==="MOA"?1:0.5);recalc();}
+function writeState(s){
+  FIELDS.forEach(k=>{
+    const el=$(k);if(!el||s[k]===undefined)return;
+    if(el.type==="checkbox")el.checked=!!s[k];
+    else if(k==="caliber"){
+      el.value=CALIBERS.includes(s.caliber)?s.caliber:CUSTOM;
+      $("caliberCustom").value=CALIBERS.includes(s.caliber)?"":s.caliber;
+    } else el.value=s[k];
+  });
+  updateClickOptions(s.click);
+  caliberChanged(false);
+}
+
+let latest=null;
+function recalc(){
+  const s=readState();
+  const env=atmosphere(s.temp,s.alt,s.rh);
+  const rad=(s.clock%12)*(Math.PI/6);
+  env.crossMph=s.wind*Math.abs(Math.sin(rad));
+  const res=solve(s,{start:s.start,end:s.end,step:s.step},env);
+  const bdc=buildBdc(res.rec,s,env,s.unit,s.bdcIncr,s.bdcCount);
+  latest={s,env,res,bdc,windSide:Math.sin(rad)>=0?"L":"R"};
+  $("windHint").textContent=
+    Math.round(Math.abs(Math.sin(rad))*100)+"% value crosswind ("+env.crossMph.toFixed(1)+
+    " mph effective) · air density "+env.rho.toFixed(3)+" kg/m³";
+  renderCard();
+  renderBdc();
+}
+const fmtAdj=v=>{const s=Math.abs(v)<.05?0:v;return(s<0?"−":"")+Math.abs(s).toFixed(1);};
+const fmtClicks=v=>{const c=Math.round(Math.abs(v)<.5?0:v);return(c<0?"−":"")+Math.abs(c);};
+const fmtHold=v=>v===0?"CTR":v.toFixed(1);
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function renderCard(){
+  const{s,res,windSide}=latest;
+  const U=s.unit;
+  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});
+  let heads=["RANGE\nyd","VEL\nfps","ENERGY\nft·lb","DROP\nin","ELEV\n"+U,"CLICKS\n"+s.click];
+  heads.push("WIND "+windSide+"\nin","WIND\n"+U);
+  if(s.tof)heads.push("TOF\ns");
+  heads.push("ACTUAL / NOTES\n ");
+  let html=
+   '<div class="card-head"><b>DATA ON PREVIOUS ENGAGEMENT</b><time>'+today+'</time></div>'+
+   '<div class="meta">'+
+   '<div><b>RIFLE:</b> '+esc(s.rifleName||"—")+'</div>'+
+   '<div><b>CALIBER:</b> '+esc(s.caliber||"—")+'</div>'+
+   '<div><b>LOAD:</b> '+esc(s.ammoName||"—")+' · '+s.gr+' gr · '+s.model+' '+s.bc+'</div>'+
+   '<div><b>MV:</b> '+s.mv+' fps</div>'+
+   '<div><b>OPTIC:</b> '+esc(s.scopeName||"—")+' · '+s.hob+'" HOB · '+s.click+' '+U+'/clk</div>'+
+   '<div><b>ZERO:</b> '+s.zero+' yd</div>'+
+   '<div><b>ATMOS:</b> '+s.temp+'°F · '+s.alt+' ft · '+s.rh+'% RH</div>'+
+   '<div><b>WIND:</b> '+s.wind+' mph from '+s.clock+" o'clock</div>"+
+   '</div><table class="dope"><thead><tr>'+
+   heads.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead><tbody>';
+  res.rows.forEach(r=>{
+    const cls=r.mach<1?"sub":(r.mach<1.2?"trans":"");
+    const elev=U==="MOA"?r.moa:r.mil;
+    const windU=U==="MOA"?(r.r>0?r.dIn/(1.047*(r.r/100)):0):r.dMil;
+    html+='<tr><td>'+r.r+'</td>'+
+     '<td class="'+cls+'">'+Math.round(r.vF)+'</td>'+
+     '<td>'+Math.round(r.e)+'</td>'+
+     '<td>'+(r.dropIn>=0?"+":"")+r.dropIn.toFixed(1)+'</td>'+
+     '<td style="font-weight:700">'+fmtAdj(elev)+'</td>'+
+     '<td>'+fmtClicks(elev/s.click)+'</td>'+
+     '<td>'+r.dIn.toFixed(1)+'</td>'+
+     '<td>'+windU.toFixed(1)+'</td>'+
+     (s.tof?'<td>'+r.tof.toFixed(3)+'</td>':"")+
+     '<td class="notes"><div></div></td></tr>';
+  });
+  const m=res.sum;
+  const sonic=m.sonic!==null
+    ?(m.sonic<5?'<span>SUBSONIC FLIGHT (STANDARD VELOCITY)</span>'
+      :'<span class="warn">SUBSONIC PAST ~'+Math.round(m.sonic)+' yd</span>')
+    :'<span>SUPERSONIC THROUGH '+s.end+' yd</span>';
+  html+='</tbody></table><div class="card-foot">'+
+   '<span>MAX ORD: +'+m.maxOrdIn.toFixed(1)+'" @ '+Math.round(m.maxOrdYd)+' yd</span>'+
+   (m.nearZero!==null?'<span>NEAR ZERO: '+Math.round(m.nearZero)+' yd</span>':"")+
+   sonic+'<span>ELEV = dial/hold UP · negative = below zero range</span></div>';
+  $("card").innerHTML=html;
+}
+
+function renderBdc(){
+  const{s,bdc}=latest, U=s.unit;
+  const el=$("bdcCard");
+  if(!s.bdcOn){el.style.display="none";return;}
+  el.style.display="";
+  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});
+  let heads=["HOLD\n"+U,"RANGE\nyd","VEL\nfps","DROP\nin","WIND\n"+U,"ACTUAL / NOTES\n "];
+  let html='<div class="card-head"><b>BDC / RETICLE HOLDS</b><time>'+today+'</time></div>'+
+   '<div class="meta">'+
+   '<div><b>RIFLE:</b> '+esc(s.rifleName||"—")+'</div>'+
+   '<div><b>LOAD:</b> '+esc(s.ammoName||"—")+' · MV '+s.mv+' fps</div>'+
+   '<div><b>OPTIC:</b> '+esc(s.scopeName||"—")+' · '+U+' reticle</div>'+
+   '<div><b>ZERO:</b> '+s.zero+' yd · marks every '+s.bdcIncr+' '+U+'</div>'+
+   '</div><table class="dope"><thead><tr>'+
+   heads.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead><tbody>';
+  bdc.forEach(r=>{
+    if(r.rangeYd===null){
+      html+='<tr><td>'+fmtHold(r.hold)+'</td>'+
+        '<td colspan="4" style="text-align:center;color:#9a927c">— beyond trajectory —</td>'+
+        '<td class="notes"><div></div></td></tr>';
+      return;
+    }
+    const cls=r.mach<1?"sub":(r.mach<1.2?"trans":"");
+    html+='<tr><td style="font-weight:700">'+fmtHold(r.hold)+'</td>'+
+      '<td style="font-weight:700">'+Math.round(r.rangeYd)+'</td>'+
+      '<td class="'+cls+'">'+Math.round(r.vF)+'</td>'+
+      '<td>'+(r.dropIn>=0?"+":"")+r.dropIn.toFixed(1)+'</td>'+
+      '<td>'+r.windU.toFixed(1)+'</td>'+
+      '<td class="notes"><div></div></td></tr>';
+  });
+  html+='</tbody></table><div class="card-foot">'+
+   '<span>Hold the listed reticle mark; rounds strike at the paired range.</span>'+
+   '<span>CTR = center crosshair (zero). Wind at full value from '+s.clock+" o'clock.</span></div>";
+  el.innerHTML=html;
+}
+
+/* ================= CALIBER / PRESETS ================= */
+function buildCaliberSelect(){
+  $("caliber").innerHTML=
+    CALIBERS.map(c=>'<option>'+esc(c)+'</option>').join("")+
+    '<option value="'+CUSTOM+'">Other / custom…</option>';
+}
+function caliberChanged(rc=true){
+  const isCustom=$("caliber").value===CUSTOM;
+  $("calCustomWrap").style.display=isCustom?"":"none";
+  const cal=isCustom?$("caliberCustom").value:$("caliber").value;
+  const loads=FACTORY_LOADS[cal]||[];
+  $("presetWrap").style.display=loads.length?"":"none";
+  $("ammoPreset").innerHTML='<option value="" disabled selected>Apply a factory load…</option>'+
+    loads.map((l,i)=>'<option value="'+i+'">'+esc(l.name)+' — '+l.bc+' '+l.model+' · '+l.mv+' fps</option>').join("");
+  if(rc)recalc();
+}
+function applyPreset(){
+  const cal=$("caliber").value===CUSTOM?$("caliberCustom").value:$("caliber").value;
+  const l=(FACTORY_LOADS[cal]||[])[parseInt($("ammoPreset").value)];
+  if(!l)return;
+  $("ammoName").value=l.name;$("gr").value=l.gr;$("bc").value=l.bc;
+  $("model").value=l.model;$("mv").value=l.mv;
+  $("ammoPreset").selectedIndex=0;
+  recalc();
+}
+
+/* ================= PROFILES (localStorage) ================= */
+const LS="rcb_profiles";
+const getProfiles=()=>{try{return JSON.parse(localStorage.getItem(LS))||{};}catch{return{};}};
+function refreshProfileList(){
+  const p=getProfiles(), names=Object.keys(p).sort();
+  $("profileSelect").innerHTML='<option value="" disabled selected>'+
+    (names.length?"Load a profile…":"No saved profiles")+'</option>'+
+    names.map(n=>'<option>'+esc(n)+'</option>').join("");
+}
+function saveProfile(){
+  const name=$("profileName").value.trim();
+  if(!name){alert("Give the profile a name first.");return;}
+  const p=getProfiles();p[name]=readState();
+  localStorage.setItem(LS,JSON.stringify(p));
+  refreshProfileList();
+  $("profileSelect").value=name;
+}
+function loadSavedProfile(){
+  const p=getProfiles()[$("profileSelect").value];
+  if(!p)return;
+  writeState(p);$("profileName").value=$("profileSelect").value;recalc();
+}
+function deleteProfile(){
+  const name=$("profileSelect").value;
+  if(!name||!confirm('Delete profile "'+name+'"?'))return;
+  const p=getProfiles();delete p[name];
+  localStorage.setItem(LS,JSON.stringify(p));
+  refreshProfileList();
+}
+function exportJson(){
+  const blob=new Blob([JSON.stringify({current:readState(),profiles:getProfiles()},null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download="range-card-profiles.json";a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function importJson(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(d.profiles){
+        const p={...getProfiles(),...d.profiles};
+        localStorage.setItem(LS,JSON.stringify(p));refreshProfileList();
+      }
+      if(d.current){writeState(d.current);recalc();}
+      else if(d.profile){writeState({...d.profile,...(d.chart||{})});recalc();} // old artifact format
+    }catch{alert("Couldn't parse that file.");}
+  };
+  r.readAsText(f);ev.target.value="";
+}
+
+/* ================= PNG DOWNLOAD ================= */
+function drawPng(title,meta,cols,rows,footLines,filename){
+  const M=26,W=M*2+cols.reduce((a,c)=>a+c.w,0),rowH=26;
+  const headTop=30,metaTop=62,metaLH=19;
+  const tableTop=metaTop+meta.length*metaLH+16;
+  const footTop=tableTop+34+rows.length*rowH+14, H=footTop+8+footLines.length*18+10;
+  const sc=2.5,cv=document.createElement("canvas");
+  cv.width=W*sc;cv.height=H*sc;
+  const ctx=cv.getContext("2d");ctx.scale(sc,sc);
+  const MONO="Menlo,Consolas,monospace";
+  ctx.fillStyle="#F2EFE6";ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="#1C1A14";
+  ctx.font="bold 16px "+MONO;ctx.fillText(title,M,headTop);
+  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});
+  ctx.font="11px "+MONO;ctx.fillText(today,W-M-ctx.measureText(today).width,headTop);
+  ctx.fillRect(M,headTop+10,W-M*2,2);
+  ctx.font="11.5px "+MONO;
+  meta.forEach((l,i)=>ctx.fillText(l,M,metaTop+14+i*metaLH));
+  let y=tableTop,x=M;
+  ctx.font="bold 11px "+MONO;
+  cols.forEach(c=>{const tw=ctx.measureText(c.h).width;ctx.fillText(c.h,c.a==="l"?x:x+c.w-8-tw,y+16);x+=c.w;});
+  ctx.fillRect(M,y+24,W-M*2,2);y+=34;
+  rows.forEach((r,i)=>{
+    if(i%2){ctx.fillStyle="rgba(0,0,0,0.05)";ctx.fillRect(M,y-17,W-M*2,rowH);}
+    x=M;
+    cols.forEach(c=>{
+      if(c.wi){ctx.fillStyle="rgba(0,0,0,0.3)";ctx.fillRect(x+2,y+2,c.w-14,1);x+=c.w;return;}
+      ctx.fillStyle=c.red&&c.red(r)?"#C2543F":"#1C1A14";
+      ctx.font=(c.bold?"bold ":"")+"12.5px "+MONO;
+      const t=c.f(r),tw=ctx.measureText(t).width;
+      ctx.fillText(t,c.a==="l"?x:x+c.w-8-tw,y);x+=c.w;
+    });
+    ctx.fillStyle="rgba(0,0,0,0.12)";ctx.fillRect(M,y+7,W-M*2,1);y+=rowH;
+  });
+  ctx.fillStyle="#4A463A";ctx.font="10.5px "+MONO;
+  footLines.forEach((l,i)=>ctx.fillText(l,M,footTop+8+i*18));
+  cv.toBlob(b=>{
+    const a=document.createElement("a");a.href=URL.createObjectURL(b);
+    a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  },"image/png");
+}
+
+function downloadPng(){
+  const{s,res,windSide}=latest, sum=res.sum, U=s.unit;
+  const elevOf=r=>U==="MOA"?r.moa:r.mil;
+  const windOf=r=>U==="MOA"?(r.r>0?r.dIn/(1.047*(r.r/100)):0):r.dMil;
+  const cols=[
+    {h:"RANGE yd",w:78,a:"l",f:r=>String(r.r),bold:true},
+    {h:"VEL fps",w:72,a:"r",f:r=>String(Math.round(r.vF)),red:r=>r.mach<1},
+    {h:"ENERGY",w:78,a:"r",f:r=>String(Math.round(r.e))},
+    {h:"DROP in",w:78,a:"r",f:r=>(r.dropIn>=0?"+":"")+r.dropIn.toFixed(1)},
+    {h:"ELEV "+U,w:78,a:"r",f:r=>fmtAdj(elevOf(r)),bold:true},
+    {h:"CLICKS",w:70,a:"r",f:r=>fmtClicks(elevOf(r)/s.click)},
+    {h:"WIND "+windSide+" in",w:82,a:"r",f:r=>r.dIn.toFixed(1)},
+    {h:"WIND "+U,w:78,a:"r",f:r=>windOf(r).toFixed(1)}];
+  if(s.tof)cols.push({h:"TOF s",w:70,a:"r",f:r=>r.tof.toFixed(3)});
+  cols.push({h:"ACTUAL / NOTES",w:150,a:"l",f:()=> "",wi:true});
+  const meta=[
+    "RIFLE: "+(s.rifleName||"—")+"    CALIBER: "+(s.caliber||"—"),
+    "LOAD: "+(s.ammoName||"—")+" · "+s.gr+" gr · "+s.model+" "+s.bc+" · MV "+s.mv+" fps",
+    "OPTIC: "+(s.scopeName||"—")+' · '+s.hob+'" HOB · '+s.click+" "+U+"/clk · ZERO "+s.zero+" yd",
+    "ATMOS: "+s.temp+"°F · "+s.alt+" ft · "+s.rh+"% RH · WIND "+s.wind+" mph from "+s.clock+" o'clock"];
+  const sonic=sum.sonic!==null?(sum.sonic<5?"SUBSONIC FLIGHT":"SUBSONIC PAST ~"+Math.round(sum.sonic)+" yd")
+    :"SUPERSONIC THROUGH "+s.end+" yd";
+  const foot=['MAX ORD: +'+sum.maxOrdIn.toFixed(1)+'" @ '+Math.round(sum.maxOrdYd)+" yd"+
+    (sum.nearZero!==null?"   NEAR ZERO: "+Math.round(sum.nearZero)+" yd":"")+"   "+sonic,
+    "ELEV = dial/hold UP · negative = below zero range"];
+  drawPng("DATA ON PREVIOUS ENGAGEMENT",meta,cols,res.rows,foot,
+    "dope-card-"+(s.caliber||"rifle").replace(/[^\w.-]+/g,"_")+"-"+s.zero+"yd-zero.png");
+}
+
+function downloadBdcPng(){
+  const{s,bdc}=latest, U=s.unit;
+  const cols=[
+    {h:"HOLD "+U,w:82,a:"l",f:r=>fmtHold(r.hold),bold:true},
+    {h:"RANGE yd",w:82,a:"r",f:r=>r.rangeYd===null?"—":String(Math.round(r.rangeYd)),bold:true},
+    {h:"VEL fps",w:74,a:"r",f:r=>r.rangeYd===null?"—":String(Math.round(r.vF)),red:r=>r.rangeYd!==null&&r.mach<1},
+    {h:"DROP in",w:78,a:"r",f:r=>r.rangeYd===null?"—":(r.dropIn>=0?"+":"")+r.dropIn.toFixed(1)},
+    {h:"WIND "+U,w:78,a:"r",f:r=>r.rangeYd===null?"—":r.windU.toFixed(1)},
+    {h:"ACTUAL / NOTES",w:150,a:"l",f:()=> "",wi:true}];
+  const meta=[
+    "RIFLE: "+(s.rifleName||"—")+"    CALIBER: "+(s.caliber||"—"),
+    "LOAD: "+(s.ammoName||"—")+" · MV "+s.mv+" fps · ZERO "+s.zero+" yd",
+    "RETICLE: "+U+" holds · marks every "+s.bdcIncr+" "+U];
+  drawPng("BDC / RETICLE HOLDS",meta,cols,bdc,
+    ["Hold the listed reticle mark; rounds strike at the paired range.",
+     "CTR = center crosshair (zero). Wind full value from "+s.clock+" o'clock."],
+    "bdc-card-"+(s.caliber||"rifle").replace(/[^\w.-]+/g,"_")+".png");
+}
+
+/* ================= INIT ================= */
+buildCaliberSelect();
+writeState(DEFAULTS);
+refreshProfileList();
+document.querySelectorAll("#inputs input, #inputs select").forEach(el=>{
+  if(["profileSelect","profileName","ammoPreset","caliber","importFile","unit"].includes(el.id))return;
+  el.addEventListener("input",recalc);
+});
+recalc();
+</script>
+</body>
+</html>
