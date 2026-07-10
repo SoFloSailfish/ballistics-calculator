@@ -18,6 +18,12 @@
     padding:20px 16px 48px;
   }
   .wrap { max-width:1200px; margin:0 auto; }
+  .disclaimer {
+    background:rgba(194,84,63,0.12); border:1px solid rgba(194,84,63,0.5);
+    border-radius:6px; padding:10px 14px; margin-bottom:16px;
+    font-size:12px; line-height:1.5; color:#E7C9C2;
+  }
+  .disclaimer strong { color:#E68A76; letter-spacing:0.02em; }
   header {
     display:flex; align-items:baseline; justify-content:space-between;
     flex-wrap:wrap; gap:8px; margin-bottom:18px;
@@ -110,6 +116,9 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="disclaimer no-print">
+    <strong>Use at your own risk.</strong> This is an unofficial ballistics estimator. Computed data are approximations — always verify against your chronograph, manufacturer data, and real impacts before relying on any output. No warranty; the author assumes no liability for its use.
+  </div>
   <header class="no-print">
     <div>
       <h1>Range Card <span>Builder</span></h1>
@@ -221,6 +230,18 @@
       </section>
 
       <section class="panel">
+        <h2>Max Point Blank Range</h2>
+        <label class="field"><span>Vital zone size <em>· in</em></span>
+          <input type="number" id="mpbrVital" step="0.5" min="1" max="24" value="4">
+        </label>
+        <div style="display:flex; gap:8px;">
+          <button class="solid" style="flex:1" onclick="computeMpbr()">Compute</button>
+          <button class="ghost" style="flex:1; display:none" id="mpbrApply" onclick="applyMpbrZero()">Use This Zero</button>
+        </div>
+        <p class="hint" id="mpbrHint">Finds the zero that keeps the bullet inside a vital zone (±half the size) as far as possible — hold dead center out to the MPBR, no math. Try 3–4" for prairie dogs, 8" for coyote/deer vitals.</p>
+      </section>
+
+      <section class="panel">
         <h2>Card Range</h2>
         <div class="grid3">
           <label class="field"><span>Start <em>· yd</em></span><input type="number" id="start" step="25" min="0"></label>
@@ -288,7 +309,8 @@ const FACTORY_LOADS={
   {name:"Hornady Match 73gr ELD",gr:73,bc:.398,model:"G1",mv:2790},
   {name:"Hornady Match 75gr BTHP",gr:75,bc:.395,model:"G1",mv:2790},
   {name:"Hornady Varmint Express 55gr V-MAX",gr:55,bc:.255,model:"G1",mv:3240},
-  {name:"Federal American Eagle 55gr FMJ",gr:55,bc:.269,model:"G1",mv:3240}],
+  {name:"Federal American Eagle 55gr FMJ",gr:55,bc:.269,model:"G1",mv:3240},
+  {name:"Speer Gold Dot LE Duty 55gr GDSP",gr:55,bc:.243,model:"G1",mv:3220}],
  "5.56 NATO":[
   {name:"M193 55gr FMJ",gr:55,bc:.246,model:"G1",mv:3250},
   {name:"M855 62gr FMJ (green tip)",gr:62,bc:.304,model:"G1",mv:3020},
@@ -488,6 +510,58 @@ function trueSolve(s,env,yd,actualHold,unit,mode){
   return{ok:true,value:mode==="mv"?Math.round(v):Math.round(v*1000)/1000};
 }
 
+/* Max Point Blank Range: find the zero whose max ordinate equals +vital/2,
+   then the far range where the path falls below -vital/2. */
+function mpbrSolve(s,env,vitalIn){
+  const r=vitalIn/2;
+  const ordFor=zero=>{
+    const st={...s,zero};
+    const zeroM=zero*YD;
+    let theta=0.001;
+    for(let i=0;i<6;i++){
+      const rec=integrate(theta,st,env,zeroM+1,0);
+      const at=rec[Math.round(zeroM)];
+      if(!at)break;
+      theta-=Math.atan2(at.y,zeroM);
+    }
+    const rec=integrate(theta,st,env,zeroM+1,0);
+    let mo=-1e9;
+    for(let m=0;m<=Math.round(zeroM);m++){const rr=rec[m];if(rr&&rr.y>mo)mo=rr.y;}
+    return{mo:mo*INM,theta};
+  };
+  let lo=10,hi=900;
+  if(ordFor(hi).mo<r)return{ok:false,msg:"Vital zone is so large the MPBR zero exceeds 900 yd — this load is effectively flat for that target."};
+  if(ordFor(lo).mo>r)return{ok:false,msg:"Vital zone is too small for this scope height — the bullet arcs above +"+r.toFixed(1)+'" even with a 10 yd zero.'};
+  for(let i=0;i<26;i++){
+    const mid=(lo+hi)/2;
+    if(ordFor(mid).mo>r)hi=mid;else lo=mid;
+  }
+  const zero=(lo+hi)/2, st={...s,zero};
+  const zeroM=zero*YD;
+  let theta=0.001;
+  for(let i=0;i<6;i++){
+    const rec=integrate(theta,st,env,zeroM+1,0);
+    const at=rec[Math.round(zeroM)];
+    if(!at)break;
+    theta-=Math.atan2(at.y,zeroM);
+  }
+  const rec=integrate(theta,st,env,1200*YD,0);
+  let mpbr=null,entry=0;
+  for(let m=1;m<rec.length;m++){
+    const rr=rec[m],pr=rec[m-1];
+    if(!rr||!pr)continue;
+    const yIn=rr.y*INM,pIn=pr.y*INM;
+    if(!entry&&pIn<-r&&yIn>=-r)entry=m/YD;
+    if(m>zeroM&&pIn>=-r&&yIn<-r){
+      const f=(-r-pIn)/((yIn-pIn)||1);
+      mpbr=(m-1+f)/YD;break;
+    }
+  }
+  const at100=rec[Math.min(Math.round(100*YD),rec.length-1)];
+  return{ok:true,zero:Math.round(zero),mpbr:mpbr?Math.round(mpbr):null,
+    offset100:at100?at100.y*INM:null,entry:Math.round(entry)};
+}
+
 /* ================= STATE / UI ================= */
 const $=id=>document.getElementById(id);
 const DEFAULTS={
@@ -600,6 +674,30 @@ function trueDope(){
       predicted.toFixed(2)+" "+s.unit+", actual "+hold.toFixed(2)+" at "+yd+" yd.";
   }
   recalc();
+}
+
+let lastMpbrZero=null;
+function computeMpbr(){
+  const s=readState();
+  const env=atmosphere(s.temp,s.alt,s.rh,s.pMode==="stn"?s.stn:null);
+  const vital=parseFloat($("mpbrVital").value);
+  if(!isFinite(vital)||vital<1){$("mpbrHint").textContent="Enter a vital zone size of at least 1 inch.";return;}
+  const r=mpbrSolve(s,env,vital);
+  if(!r.ok){$("mpbrHint").textContent=r.msg;$("mpbrApply").style.display="none";lastMpbrZero=null;return;}
+  lastMpbrZero=r.zero;
+  $("mpbrHint").textContent=
+    "For a "+vital+'" vital zone: zero at '+r.zero+" yd (sight in "+
+    (r.offset100>=0?"+":"")+r.offset100.toFixed(1)+'" at 100). MPBR = '+
+    (r.mpbr?r.mpbr+" yd":"beyond computed range")+
+    " — hold center from "+(r.entry>2?r.entry+" yd":"the muzzle")+
+    " out to "+(r.mpbr||"?")+" yd and stay inside ±"+(vital/2).toFixed(1)+'".';
+  $("mpbrApply").style.display="";
+}
+function applyMpbrZero(){
+  if(lastMpbrZero===null)return;
+  $("zero").value=lastMpbrZero;
+  recalc();
+  $("mpbrHint").textContent="Zero set to "+lastMpbrZero+" yd — all cards updated.";
 }
 const fmtAdj=v=>{const s=Math.abs(v)<.05?0:v;return(s<0?"−":"")+Math.abs(s).toFixed(1);};
 const fmtClicks=v=>{const c=Math.round(Math.abs(v)<.5?0:v);return(c<0?"−":"")+Math.abs(c);};
@@ -914,7 +1012,7 @@ buildCaliberSelect();
 writeState(DEFAULTS);
 refreshProfileList();
 document.querySelectorAll("#inputs input, #inputs select").forEach(el=>{
-  if(["profileSelect","profileName","ammoPreset","caliber","importFile","unit","pMode","trueRange","trueHold","trueMode"].includes(el.id))return;
+  if(["profileSelect","profileName","ammoPreset","caliber","importFile","unit","pMode","trueRange","trueHold","trueMode","mpbrVital"].includes(el.id))return;
   el.addEventListener("input",recalc);
 });
 recalc();
