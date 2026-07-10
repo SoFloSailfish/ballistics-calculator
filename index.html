@@ -188,12 +188,36 @@
         <h2>Atmosphere &amp; Wind</h2>
         <div class="grid2">
           <label class="field"><span>Temperature <em>· °F</em></span><input type="number" id="temp" step="1"></label>
-          <label class="field"><span>Altitude <em>· ft</em></span><input type="number" id="alt" step="50"></label>
+          <label class="field"><span>Pressure source</span>
+            <select id="pMode" onchange="pModeChanged()">
+              <option value="alt">Altitude</option>
+              <option value="stn">Station pressure</option>
+            </select>
+          </label>
+          <label class="field" id="altWrap"><span>Altitude <em>· ft</em></span><input type="number" id="alt" step="50"></label>
+          <label class="field" id="stnWrap" style="display:none"><span>Station pressure <em>· inHg</em></span><input type="number" id="stn" step="0.01" min="15" max="35"></label>
           <label class="field"><span>Humidity <em>· %</em></span><input type="number" id="rh" step="5" min="0" max="100"></label>
+          <label class="field"><span>Incline <em>· degrees</em></span><input type="number" id="incline" step="1" min="-60" max="60"></label>
           <label class="field"><span>Wind speed <em>· mph</em></span><input type="number" id="wind" step="1" min="0"></label>
           <label class="field"><span>Wind from <em>· o'clock</em></span><input type="number" id="clock" step="1" min="1" max="12"></label>
         </div>
         <p class="hint" id="windHint"></p>
+      </section>
+
+      <section class="panel">
+        <h2>True Your Dope</h2>
+        <div class="grid2">
+          <label class="field"><span>Range shot <em>· yd</em></span><input type="number" id="trueRange" step="25" min="50" value="300"></label>
+          <label class="field"><span>Actual dope <em>· turret unit</em></span><input type="number" id="trueHold" step="0.1" value=""></label>
+          <label class="field" style="grid-column:1/-1"><span>Solve for</span>
+            <select id="trueMode">
+              <option value="mv">Muzzle velocity (use for most error)</option>
+              <option value="bc">Ballistic coefficient (far-range-only error)</option>
+            </select>
+          </label>
+        </div>
+        <button class="solid" onclick="trueDope()">True It</button>
+        <p class="hint" id="trueHint">Shoot a group, enter the elevation that actually centered it, and this back-solves the MV or BC that matches — then updates the field and all cards.</p>
       </section>
 
       <section class="panel">
@@ -205,6 +229,7 @@
         </div>
         <div class="checks">
           <label><input type="checkbox" id="tof"> Time of flight</label>
+          <label><input type="checkbox" id="graphOn"> Trajectory graph</label>
         </div>
       </section>
 
@@ -221,6 +246,7 @@
 
     <div>
       <div class="dope-card" id="card"></div>
+      <div class="dope-card" id="graphCard" style="margin-top:18px"></div>
       <div class="dope-card" id="bdcCard" style="margin-top:18px"></div>
       <p class="note-under no-print">
         Computed dope is a starting point — true it with real impacts, and chronograph
@@ -318,15 +344,17 @@ function dragCd(t,m){
   }
   return t[t.length-1][1];
 }
-function atmosphere(tF,altFt,rhPct){
+function atmosphere(tF,altFt,rhPct,stnInHg){
   const tK=((tF-32)/1.8)+273.15, tC=tK-273.15;
-  const p=101325*Math.pow(1-6.87535e-6*altFt,5.2559);
+  const p=stnInHg?stnInHg*3386.389:101325*Math.pow(1-6.87535e-6*altFt,5.2559);
   const es=611.21*Math.exp((17.502*tC)/(240.97+tC));
   const e=Math.min(1,Math.max(0,rhPct/100))*es;
   const pd=Math.max(0,p-e);
   return{rho:pd/(287.058*tK)+e/(461.495*tK), sos:Math.sqrt(1.402*287.058*tK)};
 }
-function integrate(theta,s,env,maxM){
+function integrate(theta,s,env,maxM,inc){
+  inc=inc||0;
+  const gx=-GRAV*Math.sin(inc), gy=-GRAV*Math.cos(inc);
   const tbl=s.model==="G7"?G7:G1;
   const k=(Math.PI*env.rho)/(8*BCSI*s.bc);
   let x=0,y=-s.hob/INM,t=0;
@@ -339,12 +367,12 @@ function integrate(theta,s,env,maxM){
     const v=Math.hypot(vx,vy);
     if(v<30)break;
     const a=k*dragCd(tbl,v/env.sos)*v;
-    const ax1=-a*vx,ay1=-a*vy-GRAV;
+    const ax1=-a*vx+gx,ay1=-a*vy+gy;
     const vxm=vx+ax1*dt*.5,vym=vy+ay1*dt*.5;
     const vm=Math.hypot(vxm,vym);
     const am=k*dragCd(tbl,vm/env.sos)*vm;
     x+=vxm*dt;y+=vym*dt;
-    vx+=(-am*vxm)*dt;vy+=(-am*vym-GRAV)*dt;t+=dt;
+    vx+=(-am*vxm+gx)*dt;vy+=(-am*vym+gy)*dt;t+=dt;
     if(y<-300)break;
   }
   return rec;
@@ -353,12 +381,12 @@ function solve(s,chart,env){
   const zeroM=s.zero*YD, maxM=Math.max(zeroM,chart.end*YD,1000*YD)+2;
   let theta=0.001;
   for(let i=0;i<6;i++){
-    const rec=integrate(theta,s,env,zeroM+1);
+    const rec=integrate(theta,s,env,zeroM+1,0);
     const at=rec[Math.round(zeroM)];
     if(!at)break;
     theta-=Math.atan2(at.y,zeroM);
   }
-  const rec=integrate(theta,s,env,maxM);
+  const rec=integrate(theta,s,env,maxM,s.incRad||0);
   const v0=s.mv/FPS, rows=[];
   const stepY=Math.max(5,chart.step);
   for(let r=chart.start;r<=chart.end+.001;r+=stepY){
@@ -424,6 +452,42 @@ function buildBdc(rec,s,env,unit,incr,count){
   return rows;
 }
 
+/* Truing: predicted hold (turret units) at a range for a given setup */
+function holdAtRange(s,env,yd,unit){
+  const zeroM=s.zero*YD;
+  let theta=0.001;
+  for(let i=0;i<6;i++){
+    const rec=integrate(theta,s,env,zeroM+1,0);
+    const at=rec[Math.round(zeroM)];
+    if(!at)break;
+    theta-=Math.atan2(at.y,zeroM);
+  }
+  const rec=integrate(theta,s,env,yd*YD+2,s.incRad||0);
+  const rr=rec[Math.min(Math.round(yd*YD),rec.length-1)];
+  if(!rr)return null;
+  const dropIn=rr.y*INM;
+  return unit==="MOA"?-dropIn/(1.047*(yd/100)):(-dropIn/(yd*36))*1000;
+}
+
+/* Binary-search MV or BC so predicted hold matches actual dope.
+   Both are monotonic: higher MV / higher BC -> flatter -> smaller hold. */
+function trueSolve(s,env,yd,actualHold,unit,mode){
+  let lo,hi;
+  if(mode==="mv"){lo=Math.max(300,s.mv-800);hi=s.mv+800;}
+  else{lo=Math.max(0.05,s.bc*0.4);hi=s.bc*2.5;}
+  const holdWith=v=>holdAtRange(mode==="mv"?{...s,mv:v}:{...s,bc:v},env,yd,unit);
+  const hLo=holdWith(lo),hHi=holdWith(hi);
+  if(hLo===null||hHi===null)return{ok:false,msg:"Range beyond trajectory."};
+  if(actualHold>hLo)return{ok:false,msg:"Actual dope exceeds the search window — check the entry."};
+  if(actualHold<hHi)return{ok:false,msg:"Actual dope is flatter than the search window — check the entry."};
+  for(let i=0;i<50;i++){
+    const mid=(lo+hi)/2;
+    if(holdWith(mid)>actualHold)lo=mid;else hi=mid;
+  }
+  const v=(lo+hi)/2;
+  return{ok:true,value:mode==="mv"?Math.round(v):Math.round(v*1000)/1000};
+}
+
 /* ================= STATE / UI ================= */
 const $=id=>document.getElementById(id);
 const DEFAULTS={
@@ -431,11 +495,12 @@ const DEFAULTS={
   ammoName:"Australian Outback 69gr SMK", gr:69, bc:0.301, model:"G1", mv:2959,
   scopeName:"Bushnell Match Pro 6-24x50", hob:2.0, zero:100,
   temp:90, alt:10, rh:70, wind:10, clock:3,
-  start:50, end:300, step:50, unit:"MIL", click:0.1, tof:false,
+  pMode:"alt", stn:29.92, incline:0,
+  start:50, end:300, step:50, unit:"MIL", click:0.1, tof:false, graphOn:true,
   bdcOn:true, bdcIncr:0.5, bdcCount:12
 };
 const FIELDS=Object.keys(DEFAULTS);
-const NUMS=["gr","bc","mv","hob","zero","temp","alt","rh","wind","clock","start","end","step","click","bdcIncr","bdcCount"];
+const NUMS=["gr","bc","mv","hob","zero","temp","alt","rh","wind","clock","start","end","step","click","bdcIncr","bdcCount","stn","incline"];
 
 function readState(){
   const s={};
@@ -458,7 +523,16 @@ function readState(){
   s.click=n(s.click,s.unit==="MOA"?0.25:0.1);
   s.bdcIncr=Math.max(0.05,n(s.bdcIncr,s.unit==="MOA"?1:0.5));
   s.bdcCount=Math.max(1,Math.min(30,Math.round(n(s.bdcCount,12))));
+  s.stn=Math.min(35,Math.max(15,n(s.stn,29.92)));
+  s.incline=Math.min(60,Math.max(-60,n(s.incline,0)));
+  s.incRad=s.incline*Math.PI/180;
   return s;
+}
+function pModeChanged(){
+  const stn=$("pMode").value==="stn";
+  $("altWrap").style.display=stn?"none":"";
+  $("stnWrap").style.display=stn?"":"none";
+  recalc();
 }
 function updateClickOptions(keep){
   const u=$("unit").value;
@@ -482,13 +556,16 @@ function writeState(s){
     } else el.value=s[k];
   });
   updateClickOptions(s.click);
+  const stn=($("pMode").value==="stn");
+  $("altWrap").style.display=stn?"none":"";
+  $("stnWrap").style.display=stn?"":"none";
   caliberChanged(false);
 }
 
 let latest=null;
 function recalc(){
   const s=readState();
-  const env=atmosphere(s.temp,s.alt,s.rh);
+  const env=atmosphere(s.temp,s.alt,s.rh,s.pMode==="stn"?s.stn:null);
   const rad=(s.clock%12)*(Math.PI/6);
   env.crossMph=s.wind*Math.abs(Math.sin(rad));
   const res=solve(s,{start:s.start,end:s.end,step:s.step},env);
@@ -498,7 +575,31 @@ function recalc(){
     Math.round(Math.abs(Math.sin(rad))*100)+"% value crosswind ("+env.crossMph.toFixed(1)+
     " mph effective) · air density "+env.rho.toFixed(3)+" kg/m³";
   renderCard();
+  renderGraph();
   renderBdc();
+}
+
+function trueDope(){
+  const s=readState();
+  const env=atmosphere(s.temp,s.alt,s.rh,s.pMode==="stn"?s.stn:null);
+  const yd=parseFloat($("trueRange").value);
+  const hold=parseFloat($("trueHold").value);
+  const mode=$("trueMode").value;
+  if(!isFinite(yd)||yd<50){$("trueHint").textContent="Enter the range you shot (50 yd minimum).";return;}
+  if(!isFinite(hold)){$("trueHint").textContent="Enter the actual elevation ("+s.unit+") that centered your group.";return;}
+  const predicted=holdAtRange(s,env,yd,s.unit);
+  const r=trueSolve(s,env,yd,hold,s.unit,mode);
+  if(!r.ok){$("trueHint").textContent=r.msg;return;}
+  if(mode==="mv"){
+    const old=s.mv;$("mv").value=r.value;
+    $("trueHint").textContent="MV trued to "+r.value+" fps (was "+old+"). Predicted was "+
+      predicted.toFixed(2)+" "+s.unit+", actual "+hold.toFixed(2)+" at "+yd+" yd.";
+  }else{
+    const old=s.bc;$("bc").value=r.value;
+    $("trueHint").textContent="BC trued to "+r.value+" (was "+old+"). Predicted was "+
+      predicted.toFixed(2)+" "+s.unit+", actual "+hold.toFixed(2)+" at "+yd+" yd.";
+  }
+  recalc();
 }
 const fmtAdj=v=>{const s=Math.abs(v)<.05?0:v;return(s<0?"−":"")+Math.abs(s).toFixed(1);};
 const fmtClicks=v=>{const c=Math.round(Math.abs(v)<.5?0:v);return(c<0?"−":"")+Math.abs(c);};
@@ -522,7 +623,7 @@ function renderCard(){
    '<div><b>MV:</b> '+s.mv+' fps</div>'+
    '<div><b>OPTIC:</b> '+esc(s.scopeName||"—")+' · '+s.hob+'" HOB · '+s.click+' '+U+'/clk</div>'+
    '<div><b>ZERO:</b> '+s.zero+' yd</div>'+
-   '<div><b>ATMOS:</b> '+s.temp+'°F · '+s.alt+' ft · '+s.rh+'% RH</div>'+
+   '<div><b>ATMOS:</b> '+s.temp+'°F · '+(s.pMode==="stn"?s.stn.toFixed(2)+' inHg':s.alt+' ft')+' · '+s.rh+'% RH'+(s.incline?' · INCL '+(s.incline>0?"+":"")+s.incline+'°':"")+'</div>'+
    '<div><b>WIND:</b> '+s.wind+' mph from '+s.clock+" o'clock</div>"+
    '</div><table class="dope"><thead><tr>'+
    heads.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead><tbody>';
@@ -587,6 +688,57 @@ function renderBdc(){
    '<span>Hold the listed reticle mark; rounds strike at the paired range.</span>'+
    '<span>CTR = center crosshair (zero). Wind at full value from '+s.clock+" o'clock.</span></div>";
   el.innerHTML=html;
+}
+
+function renderGraph(){
+  const{s,res}=latest;
+  const el=$("graphCard");
+  if(!s.graphOn){el.style.display="none";return;}
+  el.style.display="";
+  const endYd=s.end;
+  const step=Math.max(1,endYd/160);
+  const pts=[];
+  for(let yd=0;yd<=endYd;yd+=step){
+    const m=Math.min(Math.round(yd*YD),res.rec.length-1);
+    const rr=res.rec[m]; if(!rr)break;
+    pts.push([yd,rr.y*INM]);
+  }
+  if(pts.length<2){el.innerHTML="";return;}
+  let yMax=1,yMin=-1;
+  pts.forEach(p=>{if(p[1]>yMax)yMax=p[1];if(p[1]<yMin)yMin=p[1];});
+  const pad=(yMax-yMin)*0.08;yMax+=pad;yMin-=pad;
+  const W=720,H=250,mL=52,mR=14,mT=16,mB=34;
+  const sx=yd=>mL+(yd/endYd)*(W-mL-mR);
+  const sy=v=>mT+((yMax-v)/(yMax-yMin))*(H-mT-mB);
+  const nice=raw=>{const p=Math.pow(10,Math.floor(Math.log10(raw)));const c=raw/p;return(c<=1?1:c<=2?2:c<=5?5:10)*p;};
+  const xStep=nice(endYd/6), yStep=nice((yMax-yMin)/5);
+  let grid="",labels="";
+  for(let x=0;x<=endYd+0.01;x+=xStep){
+    grid+='<line x1="'+sx(x)+'" y1="'+mT+'" x2="'+sx(x)+'" y2="'+(H-mB)+'" stroke="rgba(0,0,0,0.08)"/>';
+    labels+='<text x="'+sx(x)+'" y="'+(H-mB+16)+'" text-anchor="middle" font-size="10">'+Math.round(x)+'</text>';
+  }
+  for(let y=Math.ceil(yMin/yStep)*yStep;y<=yMax;y+=yStep){
+    grid+='<line x1="'+mL+'" y1="'+sy(y)+'" x2="'+(W-mR)+'" y2="'+sy(y)+'" stroke="rgba(0,0,0,0.08)"/>';
+    labels+='<text x="'+(mL-6)+'" y="'+(sy(y)+3)+'" text-anchor="end" font-size="10">'+(Math.abs(y)<0.001?0:y.toFixed(yStep<1?1:0))+'</text>';
+  }
+  const path=pts.map((p,i)=>(i?'L':'M')+sx(p[0]).toFixed(1)+' '+sy(p[1]).toFixed(1)).join('');
+  const m2=res.sum;
+  const zeroX=sx(s.zero);
+  el.innerHTML=
+   '<div class="card-head"><b>TRAJECTORY</b><time>drop (in) vs range (yd)</time></div>'+
+   '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;display:block" xmlns="http://www.w3.org/2000/svg">'+
+   grid+labels+
+   '<line x1="'+mL+'" y1="'+sy(0)+'" x2="'+(W-mR)+'" y2="'+sy(0)+'" stroke="#8B9464" stroke-width="1.5" stroke-dasharray="6 4"/>'+
+   '<text x="'+(W-mR-4)+'" y="'+(sy(0)-5)+'" text-anchor="end" font-size="10" fill="#6b7350">LINE OF SIGHT</text>'+
+   '<line x1="'+zeroX+'" y1="'+mT+'" x2="'+zeroX+'" y2="'+(H-mB)+'" stroke="#C2543F" stroke-width="1" stroke-dasharray="3 3"/>'+
+   '<text x="'+zeroX+'" y="'+(mT-2+12)+'" text-anchor="middle" font-size="10" fill="#C2543F">ZERO '+s.zero+'</text>'+
+   '<path d="'+path+'" fill="none" stroke="#1C1A14" stroke-width="2.2"/>'+
+   '<circle cx="'+sx(m2.maxOrdYd)+'" cy="'+sy(m2.maxOrdIn)+'" r="3.5" fill="#D9A441" stroke="#1C1A14"/>'+
+   '<text x="'+sx(m2.maxOrdYd)+'" y="'+(sy(m2.maxOrdIn)-8)+'" text-anchor="middle" font-size="10">MAX ORD +'+m2.maxOrdIn.toFixed(1)+'"</text>'+
+   '</svg>'+
+   '<div class="card-foot"><span>Bullet path relative to line of sight'+
+   (s.incline?'<span style="margin-left:18px">INCLINE: '+(s.incline>0?"+":"")+s.incline+'°</span>':"")+
+   '</span></div>';
 }
 
 /* ================= CALIBER / PRESETS ================= */
@@ -728,7 +880,7 @@ function downloadPng(){
     "RIFLE: "+(s.rifleName||"—")+"    CALIBER: "+(s.caliber||"—"),
     "LOAD: "+(s.ammoName||"—")+" · "+s.gr+" gr · "+s.model+" "+s.bc+" · MV "+s.mv+" fps",
     "OPTIC: "+(s.scopeName||"—")+' · '+s.hob+'" HOB · '+s.click+" "+U+"/clk · ZERO "+s.zero+" yd",
-    "ATMOS: "+s.temp+"°F · "+s.alt+" ft · "+s.rh+"% RH · WIND "+s.wind+" mph from "+s.clock+" o'clock"];
+    "ATMOS: "+s.temp+"°F · "+(s.pMode==="stn"?s.stn.toFixed(2)+" inHg":s.alt+" ft")+" · "+s.rh+"% RH"+(s.incline?" · INCL "+(s.incline>0?"+":"")+s.incline+"°":"")+" · WIND "+s.wind+" mph from "+s.clock+" o'clock"];
   const sonic=sum.sonic!==null?(sum.sonic<5?"SUBSONIC FLIGHT":"SUBSONIC PAST ~"+Math.round(sum.sonic)+" yd")
     :"SUPERSONIC THROUGH "+s.end+" yd";
   const foot=['MAX ORD: +'+sum.maxOrdIn.toFixed(1)+'" @ '+Math.round(sum.maxOrdYd)+" yd"+
@@ -762,7 +914,7 @@ buildCaliberSelect();
 writeState(DEFAULTS);
 refreshProfileList();
 document.querySelectorAll("#inputs input, #inputs select").forEach(el=>{
-  if(["profileSelect","profileName","ammoPreset","caliber","importFile","unit"].includes(el.id))return;
+  if(["profileSelect","profileName","ammoPreset","caliber","importFile","unit","pMode","trueRange","trueHold","trueMode"].includes(el.id))return;
   el.addEventListener("input",recalc);
 });
 recalc();
