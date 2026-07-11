@@ -258,10 +258,25 @@
         <h2>BDC / Reticle Card</h2>
         <div class="checks"><label><input type="checkbox" id="bdcOn"> Show BDC reticle card</label></div>
         <div class="grid2">
-          <label class="field"><span>Mark spacing <em>· turret unit</em></span><input type="number" id="bdcIncr" step="0.1" min="0.05"></label>
-          <label class="field"><span>Number of marks</span><input type="number" id="bdcCount" step="1" min="1" max="30"></label>
+          <label class="field"><span>Reticle type</span>
+            <select id="bdcType" onchange="bdcTypeChanged()">
+              <option value="even">Even spacing</option>
+              <option value="custom">Custom marks (BDC circles)</option>
+            </select>
+          </label>
+          <label class="field" id="bdcIncrWrap"><span>Mark spacing <em>· turret unit</em></span><input type="number" id="bdcIncr" step="0.1" min="0.05"></label>
+          <label class="field" id="bdcCountWrap"><span>Number of marks</span><input type="number" id="bdcCount" step="1" min="1" max="30"></label>
+          <label class="field" id="bdcMarksWrap" style="display:none;grid-column:1/-1"><span>Circle subtensions <em>· turret unit, comma-separated</em></span><input type="text" id="bdcMarks" placeholder="0.53, 1.22, 1.91, 3.02"></label>
+          <label class="field"><span>Focal plane</span>
+            <select id="focal" onchange="focalChanged()">
+              <option value="ffp">FFP (first focal plane)</option>
+              <option value="sfp">SFP (second focal plane)</option>
+            </select>
+          </label>
+          <label class="field" id="calMagWrap" style="display:none"><span>Reticle true at <em>· ×</em></span><input type="number" id="calMag" step="0.5" min="1" value="16"></label>
+          <label class="field" id="curMagWrap" style="display:none"><span>Current mag <em>· ×</em></span><input type="number" id="curMag" step="0.5" min="1" value="16"></label>
         </div>
-        <p class="hint">Maps each reticle holdover mark to the range it hits for this load — the inverse of the DOPE card.</p>
+        <p class="hint" id="bdcNote">Maps each reticle holdover mark to the range it hits for this load — the inverse of the DOPE card. FFP reticles are true at any magnification; SFP reticles are only true at their calibrated power. Custom marks let you enter uneven BDC circle subtensions.</p>
       </section>
     </div>
 
@@ -440,7 +455,8 @@ function solve(s,chart,env){
 
 /* Inverse lookup: for each reticle holdover mark (in turret unit), find the
    range at which that hold puts rounds on target for this load. */
-function buildBdc(rec,s,env,unit,incr,count){
+function buildBdc(rec,s,env,unit,incr,count,retScale,customMarks){
+  retScale=retScale||1;
   const v0=s.mv/FPS;
   const holdAt=m=>{
     const rr=rec[m]; if(!rr)return null;
@@ -457,9 +473,12 @@ function buildBdc(rec,s,env,unit,incr,count){
     return {vF, e:(s.gr*vF*vF)/450436, dropIn:rr.y*INM, driftIn:drift, windU, mach:rr.v/env.sos};
   };
   const startM=Math.max(1,Math.round(s.zero*YD));
-  const rows=[{hold:0,rangeYd:s.zero,...rowAt(s.zero)}];
-  for(let i=1;i<=count;i++){
-    const target=incr*i;
+  const rows=[{hold:0,mark:0,rangeYd:s.zero,...rowAt(s.zero)}];
+  const marks=(customMarks&&customMarks.length)
+    ? customMarks
+    : Array.from({length:count},(_,i)=>incr*(i+1));
+  marks.forEach(mark=>{
+    const target=mark*retScale;  // effective hold at current magnification
     let found=null;
     for(let m=startM+1;m<rec.length;m++){
       const h0=holdAt(m-1),h1=holdAt(m);
@@ -469,8 +488,8 @@ function buildBdc(rec,s,env,unit,incr,count){
         found=(m-1+f)/YD; break;
       }
     }
-    rows.push(found!==null?{hold:target,rangeYd:found,...rowAt(found)}:{hold:target,rangeYd:null});
-  }
+    rows.push(found!==null?{hold:target,mark,rangeYd:found,...rowAt(found)}:{hold:target,mark,rangeYd:null});
+  });
   return rows;
 }
 
@@ -571,10 +590,11 @@ const DEFAULTS={
   temp:90, alt:10, rh:70, wind:10, clock:3,
   pMode:"alt", stn:29.92, incline:0,
   start:50, end:300, step:50, unit:"MIL", click:0.1, tof:false, graphOn:true,
-  bdcOn:true, bdcIncr:0.5, bdcCount:12
+  bdcOn:true, bdcIncr:0.5, bdcCount:12, focal:"ffp", calMag:16, curMag:16,
+  bdcType:"even", bdcMarks:""
 };
 const FIELDS=Object.keys(DEFAULTS);
-const NUMS=["gr","bc","mv","hob","zero","temp","alt","rh","wind","clock","start","end","step","click","bdcIncr","bdcCount","stn","incline"];
+const NUMS=["gr","bc","mv","hob","zero","temp","alt","rh","wind","clock","start","end","step","click","bdcIncr","bdcCount","stn","incline","calMag","curMag"];
 
 function readState(){
   const s={};
@@ -600,7 +620,26 @@ function readState(){
   s.stn=Math.min(35,Math.max(15,n(s.stn,29.92)));
   s.incline=Math.min(60,Math.max(-60,n(s.incline,0)));
   s.incRad=s.incline*Math.PI/180;
+  s.calMag=Math.max(1,n(s.calMag,16));
+  s.curMag=Math.max(1,n(s.curMag,16));
+  s.retScale=(s.focal==="sfp")?(s.calMag/s.curMag):1;
+  s.customMarks=(s.bdcType==="custom")
+    ? String(s.bdcMarks||"").split(",").map(x=>parseFloat(x.trim())).filter(x=>isFinite(x)&&x>0).sort((a,b)=>a-b)
+    : null;
   return s;
+}
+function bdcTypeChanged(){
+  const custom=$("bdcType").value==="custom";
+  $("bdcIncrWrap").style.display=custom?"none":"";
+  $("bdcCountWrap").style.display=custom?"none":"";
+  $("bdcMarksWrap").style.display=custom?"":"none";
+  recalc();
+}
+function focalChanged(){
+  const sfp=$("focal").value==="sfp";
+  $("calMagWrap").style.display=sfp?"":"none";
+  $("curMagWrap").style.display=sfp?"":"none";
+  recalc();
 }
 function pModeChanged(){
   const stn=$("pMode").value==="stn";
@@ -633,6 +672,13 @@ function writeState(s){
   const stn=($("pMode").value==="stn");
   $("altWrap").style.display=stn?"none":"";
   $("stnWrap").style.display=stn?"":"none";
+  const sfp=($("focal").value==="sfp");
+  $("calMagWrap").style.display=sfp?"":"none";
+  $("curMagWrap").style.display=sfp?"":"none";
+  const custom=($("bdcType").value==="custom");
+  $("bdcIncrWrap").style.display=custom?"none":"";
+  $("bdcCountWrap").style.display=custom?"none":"";
+  $("bdcMarksWrap").style.display=custom?"":"none";
   caliberChanged(false);
 }
 
@@ -643,7 +689,7 @@ function recalc(){
   const rad=(s.clock%12)*(Math.PI/6);
   env.crossMph=s.wind*Math.abs(Math.sin(rad));
   const res=solve(s,{start:s.start,end:s.end,step:s.step},env);
-  const bdc=buildBdc(res.rec,s,env,s.unit,s.bdcIncr,s.bdcCount);
+  const bdc=buildBdc(res.rec,s,env,s.unit,s.bdcIncr,s.bdcCount,s.retScale,s.customMarks);
   latest={s,env,res,bdc,windSide:Math.sin(rad)>=0?"L":"R"};
   $("windHint").textContent=
     Math.round(Math.abs(Math.sin(rad))*100)+"% value crosswind ("+env.crossMph.toFixed(1)+
@@ -757,33 +803,58 @@ function renderBdc(){
   const el=$("bdcCard");
   if(!s.bdcOn){el.style.display="none";return;}
   el.style.display="";
+  const sfp=(s.focal==="sfp" && Math.abs(s.retScale-1)>0.001);
+  const custom=(s.bdcType==="custom" && s.customMarks && s.customMarks.length);
+  const markLabel=custom?"CIRCLE":"MARK";
   const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});
-  let heads=["HOLD\n"+U,"RANGE\nyd","VEL\nfps","DROP\nin","WIND\n"+U,"ACTUAL / NOTES\n "];
+  let heads=sfp
+    ?[markLabel+"\n"+U,"EFF HOLD\n"+U,"RANGE\nyd","VEL\nfps","WIND\n"+U,"ACTUAL / NOTES\n "]
+    :[(custom?"CIRCLE\n"+U:"HOLD\n"+U),"RANGE\nyd","VEL\nfps","DROP\nin","WIND\n"+U,"ACTUAL / NOTES\n "];
+  const spacingText=custom?"custom circles":("marks every "+s.bdcIncr+" "+U);
+  const optic=sfp
+    ? esc(s.scopeName||"—")+' · '+U+' SFP · true @ '+s.calMag+'× · shown @ '+s.curMag+'×'
+    : esc(s.scopeName||"—")+' · '+U+' reticle'+(s.focal==="ffp"?' (FFP)':'');
   let html='<div class="card-head"><b>BDC / RETICLE HOLDS</b><time>'+today+'</time></div>'+
    '<div class="meta">'+
    '<div><b>RIFLE:</b> '+esc(s.rifleName||"—")+'</div>'+
    '<div><b>LOAD:</b> '+esc(s.ammoName||"—")+' · MV '+s.mv+' fps</div>'+
-   '<div><b>OPTIC:</b> '+esc(s.scopeName||"—")+' · '+U+' reticle</div>'+
-   '<div><b>ZERO:</b> '+s.zero+' yd · marks every '+s.bdcIncr+' '+U+'</div>'+
+   '<div><b>OPTIC:</b> '+optic+'</div>'+
+   '<div><b>ZERO:</b> '+s.zero+' yd · '+spacingText+'</div>'+
    '</div><table class="dope"><thead><tr>'+
    heads.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead><tbody>';
+  let ci=0;
   bdc.forEach(r=>{
+    const isCtr=(r.mark===0);
+    if(custom&&!isCtr)ci++;
+    const label=custom?(isCtr?"CTR":("C"+ci+" · "+fmtHold(r.mark))):fmtHold(sfp?r.mark:r.hold);
+    const firstCell='<td style="font-weight:700">'+esc(label)+'</td>';
     if(r.rangeYd===null){
-      html+='<tr><td>'+fmtHold(r.hold)+'</td>'+
-        '<td colspan="4" style="text-align:center;color:#9a927c">— beyond trajectory —</td>'+
+      html+='<tr>'+firstCell+(sfp?'<td style="font-weight:700">'+fmtHold(r.hold)+'</td>':'')+
+        '<td colspan="3" style="text-align:center;color:#9a927c">— beyond trajectory —</td>'+
         '<td class="notes"><div></div></td></tr>';
       return;
     }
     const cls=r.mach<1?"sub":(r.mach<1.2?"trans":"");
-    html+='<tr><td style="font-weight:700">'+fmtHold(r.hold)+'</td>'+
-      '<td style="font-weight:700">'+Math.round(r.rangeYd)+'</td>'+
-      '<td class="'+cls+'">'+Math.round(r.vF)+'</td>'+
-      '<td>'+(r.dropIn>=0?"+":"")+r.dropIn.toFixed(1)+'</td>'+
-      '<td>'+r.windU.toFixed(1)+'</td>'+
-      '<td class="notes"><div></div></td></tr>';
+    if(sfp){
+      html+='<tr>'+firstCell+
+        '<td>'+fmtHold(r.hold)+'</td>'+
+        '<td style="font-weight:700">'+Math.round(r.rangeYd)+'</td>'+
+        '<td class="'+cls+'">'+Math.round(r.vF)+'</td>'+
+        '<td>'+r.windU.toFixed(1)+'</td>'+
+        '<td class="notes"><div></div></td></tr>';
+    }else{
+      html+='<tr>'+firstCell+
+        '<td style="font-weight:700">'+Math.round(r.rangeYd)+'</td>'+
+        '<td class="'+cls+'">'+Math.round(r.vF)+'</td>'+
+        '<td>'+(r.dropIn>=0?"+":"")+r.dropIn.toFixed(1)+'</td>'+
+        '<td>'+r.windU.toFixed(1)+'</td>'+
+        '<td class="notes"><div></div></td></tr>';
+    }
   });
   html+='</tbody></table><div class="card-foot">'+
-   '<span>Hold the listed reticle mark; rounds strike at the paired range.</span>'+
+   (sfp
+     ?'<span>'+markLabel+' = value on the reticle; EFF HOLD = its true value at '+s.curMag+'×.</span>'
+     :'<span>Hold the listed '+(custom?"circle":"reticle mark")+'; rounds strike at the paired range.</span>')+
    '<span>CTR = center crosshair (zero). Wind at full value from '+s.clock+" o'clock.</span></div>";
   el.innerHTML=html;
 }
@@ -990,8 +1061,24 @@ function downloadPng(){
 
 function downloadBdcPng(){
   const{s,bdc}=latest, U=s.unit;
-  const cols=[
-    {h:"HOLD "+U,w:82,a:"l",f:r=>fmtHold(r.hold),bold:true},
+  const sfp=(s.focal==="sfp" && Math.abs(s.retScale-1)>0.001);
+  const custom=(s.bdcType==="custom" && s.customMarks && s.customMarks.length);
+  const markLabel=custom?"CIRCLE":"MARK";
+  let ci=0;
+  const labelOf=r=>{
+    const isCtr=(r.mark===0);
+    if(custom){if(!isCtr)ci++;return isCtr?"CTR":("C"+ci+" · "+fmtHold(r.mark));}
+    return fmtHold(sfp?r.mark:r.hold);
+  };
+  const cols=sfp?[
+    {h:markLabel+" "+U,w:100,a:"l",f:labelOf,bold:true},
+    {h:"EFF HOLD "+U,w:92,a:"r",f:r=>fmtHold(r.hold)},
+    {h:"RANGE yd",w:82,a:"r",f:r=>r.rangeYd===null?"—":String(Math.round(r.rangeYd)),bold:true},
+    {h:"VEL fps",w:74,a:"r",f:r=>r.rangeYd===null?"—":String(Math.round(r.vF)),red:r=>r.rangeYd!==null&&r.mach<1},
+    {h:"WIND "+U,w:78,a:"r",f:r=>r.rangeYd===null?"—":r.windU.toFixed(1)},
+    {h:"ACTUAL / NOTES",w:150,a:"l",f:()=> "",wi:true}
+  ]:[
+    {h:(custom?"CIRCLE "+U:"HOLD "+U),w:custom?100:82,a:"l",f:labelOf,bold:true},
     {h:"RANGE yd",w:82,a:"r",f:r=>r.rangeYd===null?"—":String(Math.round(r.rangeYd)),bold:true},
     {h:"VEL fps",w:74,a:"r",f:r=>r.rangeYd===null?"—":String(Math.round(r.vF)),red:r=>r.rangeYd!==null&&r.mach<1},
     {h:"DROP in",w:78,a:"r",f:r=>r.rangeYd===null?"—":(r.dropIn>=0?"+":"")+r.dropIn.toFixed(1)},
@@ -1000,9 +1087,12 @@ function downloadBdcPng(){
   const meta=[
     "RIFLE: "+(s.rifleName||"—")+"    CALIBER: "+(s.caliber||"—"),
     "LOAD: "+(s.ammoName||"—")+" · MV "+s.mv+" fps · ZERO "+s.zero+" yd",
-    "RETICLE: "+U+" holds · marks every "+s.bdcIncr+" "+U];
+    sfp
+      ? "RETICLE: "+U+" SFP · true @ "+s.calMag+"× · shown @ "+s.curMag+"× · "+(custom?"custom circles":"marks every "+s.bdcIncr+" "+U)
+      : "RETICLE: "+U+(custom?" custom circles":" holds"+(s.focal==="ffp"?" (FFP)":""))];
   drawPng("BDC / RETICLE HOLDS",meta,cols,bdc,
-    ["Hold the listed reticle mark; rounds strike at the paired range.",
+    [sfp?markLabel+" = value on reticle; EFF HOLD = true value at "+s.curMag+"×."
+        :"Hold the listed "+(custom?"circle":"reticle mark")+"; rounds strike at the paired range.",
      "CTR = center crosshair (zero). Wind full value from "+s.clock+" o'clock."],
     "bdc-card-"+(s.caliber||"rifle").replace(/[^\w.-]+/g,"_")+".png");
 }
@@ -1012,7 +1102,7 @@ buildCaliberSelect();
 writeState(DEFAULTS);
 refreshProfileList();
 document.querySelectorAll("#inputs input, #inputs select").forEach(el=>{
-  if(["profileSelect","profileName","ammoPreset","caliber","importFile","unit","pMode","trueRange","trueHold","trueMode","mpbrVital"].includes(el.id))return;
+  if(["profileSelect","profileName","ammoPreset","caliber","importFile","unit","pMode","trueRange","trueHold","trueMode","mpbrVital","focal","bdcType"].includes(el.id))return;
   el.addEventListener("input",recalc);
 });
 recalc();
