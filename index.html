@@ -814,7 +814,8 @@ function renderBdc(){
   const optic=sfp
     ? esc(s.scopeName||"—")+' · '+U+' SFP · true @ '+s.calMag+'× · shown @ '+s.curMag+'×'
     : esc(s.scopeName||"—")+' · '+U+' reticle'+(s.focal==="ffp"?' (FFP)':'');
-  let html='<div class="card-head"><b>BDC / RETICLE HOLDS</b><time>'+today+'</time></div>'+
+  const magTag=sfp?(' @ '+s.curMag+'×'):(s.focal==="sfp"?(' @ '+s.curMag+'×'):'');
+  let html='<div class="card-head"><b>BDC / RETICLE HOLDS'+(magTag?'<span style="color:#C2543F">'+magTag+'</span>':'')+'</b><time>'+today+'</time></div>'+
    '<div class="meta">'+
    '<div><b>RIFLE:</b> '+esc(s.rifleName||"—")+'</div>'+
    '<div><b>LOAD:</b> '+esc(s.ammoName||"—")+' · MV '+s.mv+' fps</div>'+
@@ -1090,7 +1091,8 @@ function downloadBdcPng(){
     sfp
       ? "RETICLE: "+U+" SFP · true @ "+s.calMag+"× · shown @ "+s.curMag+"× · "+(custom?"custom circles":"marks every "+s.bdcIncr+" "+U)
       : "RETICLE: "+U+(custom?" custom circles":" holds"+(s.focal==="ffp"?" (FFP)":""))];
-  drawPng("BDC / RETICLE HOLDS",meta,cols,bdc,
+  const magSuffix=(s.focal==="sfp")?(" @ "+s.curMag+"×"):"";
+  drawPng("BDC / RETICLE HOLDS"+magSuffix,meta,cols,bdc,
     [sfp?markLabel+" = value on reticle; EFF HOLD = true value at "+s.curMag+"×."
         :"Hold the listed "+(custom?"circle":"reticle mark")+"; rounds strike at the paired range.",
      "CTR = center crosshair (zero). Wind full value from "+s.clock+" o'clock."],
