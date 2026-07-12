@@ -24,6 +24,32 @@
     font-size:12px; line-height:1.5; color:#E7C9C2;
   }
   .disclaimer strong { color:#E68A76; letter-spacing:0.02em; }
+  .help-overlay {
+    position:fixed; inset:0; background:rgba(10,11,12,0.88); z-index:100;
+    display:none; align-items:flex-start; justify-content:center; overflow-y:auto; padding:24px 16px;
+  }
+  .help-overlay.show { display:flex; }
+  .help-box {
+    background:var(--panel); border:1px solid var(--edge); border-radius:8px;
+    max-width:820px; width:100%; padding:24px 26px 30px;
+  }
+  .help-box h2 {
+    margin:0 0 4px; font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber);
+  }
+  .help-box h3 {
+    margin:22px 0 6px; font-size:12px; letter-spacing:0.18em; text-transform:uppercase;
+    color:var(--amber); border-bottom:1px solid var(--edge); padding-bottom:6px;
+  }
+  .help-box p { margin:6px 0; font-size:13px; line-height:1.6; color:#D4D0C7; }
+  .help-box .lead { color:var(--dim); font-size:12.5px; margin-bottom:8px; }
+  .help-box b { color:#EDE9DF; }
+  .help-box .tip {
+    background:rgba(139,148,100,0.12); border-left:3px solid var(--olive);
+    padding:8px 12px; margin:10px 0; font-size:12.5px; line-height:1.55; color:#D4D0C7; border-radius:0 4px 4px 0;
+  }
+  .help-close {
+    position:sticky; top:0; float:right; margin:-8px -8px 0 0;
+  }
   header {
     display:flex; align-items:baseline; justify-content:space-between;
     flex-wrap:wrap; gap:8px; margin-bottom:18px;
@@ -119,12 +145,58 @@
   <div class="disclaimer no-print">
     <strong>Use at your own risk.</strong> This is an unofficial ballistics estimator. Computed data are approximations — always verify against your chronograph, manufacturer data, and real impacts before relying on any output. No warranty; the author assumes no liability for its use.
   </div>
+
+  <div class="help-overlay no-print" id="helpOverlay" onclick="if(event.target===this)hideHelp()">
+    <div class="help-box">
+      <button class="ghost help-close" onclick="hideHelp()">Close</button>
+      <h2>Range Card Builder — Instructions</h2>
+      <p class="lead">A point-mass ballistics solver that builds printable DOPE and BDC reticle cards. Fill in the panels on the left; the cards update live. Everything runs in your browser — nothing is uploaded.</p>
+
+      <h3>Getting Started</h3>
+      <p>Pick your <b>Caliber</b>, then choose a <b>Factory load preset</b> to auto-fill bullet weight, ballistic coefficient (BC), drag model, and muzzle velocity. Adjust anything by hand afterward. Set your <b>Optic</b> details and <b>Zero range</b>, then read the DOPE card on the right.</p>
+      <div class="tip"><b>Most important input:</b> muzzle velocity. Factory numbers come from a 24" test barrel — your rifle will differ. Chronograph when you can, or use <b>True Your Dope</b> (below) to back it out from real impacts.</div>
+
+      <h3>Rifle &amp; Ammunition</h3>
+      <p><b>Caliber</b> selects which factory-load presets appear. <b>Bullet weight</b>, <b>BC</b>, and <b>muzzle velocity</b> drive the trajectory. <b>Drag model</b> (G1 or G7): use whichever the manufacturer publishes. G1 suits flat-base and shorter bullets; G7 tracks long boat-tail match bullets better past ~400 yd. Never mix them — a G7 number entered as G1 will wildly overstate drop.</p>
+
+      <h3>Optic</h3>
+      <p><b>Height over bore (HOB)</b> is the distance from the center of the scope to the center of the bore, in inches — measure it, as it affects close-range holds and BDC circle ranges. <b>Zero range</b> is where your rifle is sighted dead-on. <b>Turret units</b> (MIL or MOA) sets what the elevation and wind columns display; match it to your scope's turrets. <b>Click value</b> sets the per-click increment for the CLICKS column.</p>
+
+      <h3>Atmosphere &amp; Wind</h3>
+      <p><b>Temperature</b>, <b>humidity</b>, and either <b>altitude</b> or <b>station pressure</b> set the air density the bullet flies through. Use station pressure if you have a Kestrel or weather-app reading (it already accounts for elevation); otherwise use altitude. <b>Incline</b> is the up/down shot angle in degrees — leave at 0 for level ground. <b>Wind speed</b> and <b>Wind from</b> (clock direction: 3 or 9 o'clock is full-value crosswind, 12 or 6 is none) drive the wind hold columns.</p>
+
+      <h3>True Your Dope</h3>
+      <p>The most valuable feature. Shoot a group at a known distance, enter that <b>range</b> and the <b>actual elevation</b> that centered your group, choose whether to solve <b>muzzle velocity</b> or <b>BC</b>, and press <b>True It</b>. The tool back-solves the value that makes prediction match reality, then updates every card.</p>
+      <div class="tip">Solve <b>muzzle velocity</b> for most error (it's usually the culprit). Solve <b>BC</b> only when your close-range dope matches but far-range is off. True at 300+ yd where error is large enough to see.</div>
+
+      <h3>Max Point Blank Range (MPBR)</h3>
+      <p>Enter your target's <b>vital zone size</b> in inches (≈3–4" for prairie dogs, 8" for coyote/deer vitals) and press <b>Compute</b>. The tool finds the zero that keeps the bullet inside that zone as far as possible, and reports the resulting zero, the 100-yd sight-in height, and the max point blank range — the farthest you can hold dead center without missing high or low. <b>Use This Zero</b> applies it to your setup.</p>
+
+      <h3>Card Range &amp; Trajectory Graph</h3>
+      <p><b>Start / End / Step</b> set the distances shown on the DOPE card. <b>Time of flight</b> and <b>Trajectory graph</b> are optional toggles — the graph plots bullet path vs. line of sight with your zero and max ordinate marked.</p>
+
+      <h3>BDC / Reticle Card</h3>
+      <p>This card does the <b>inverse</b> of the DOPE card: instead of "range → hold," it tells you what range each reticle holdover mark actually hits for your load. Two reticle types:</p>
+      <p><b>Even spacing</b> — for mil-hash or MOA-hash reticles with evenly spaced marks. Set the <b>mark spacing</b> (e.g. 0.5 mil) and <b>number of marks</b>.</p>
+      <p><b>Custom marks (BDC circles)</b> — for factory BDC reticles (like Nikon) whose circles are unevenly spaced. Enter each circle's subtension, comma-separated, in your current turret unit. Read the true subtensions from the manufacturer's ballistic program (e.g. Nikon Spot On's reticle-view mode) for best accuracy.</p>
+      <p><b>Focal plane:</b> <b>First (FFP)</b> reticles are true at any magnification — nothing more to set. <b>Second (SFP)</b> reticles are only true at one calibrated power; set <b>Reticle true at</b> (usually max magnification) and <b>Current mag</b> (what you're dialed to), and the card scales the holds accordingly. The current magnification prints in the card title so multiple cards don't get confused.</p>
+      <div class="tip">Subtension is an <b>angular</b> value, so it must be entered in the same unit (MIL or MOA) the tool is set to. The same circle is 0.53 mil <i>or</i> 1.82 MOA — entering the wrong unit's number will be badly off.</div>
+
+      <h3>Saving, Printing &amp; Sharing</h3>
+      <p><b>Profiles</b> save a complete setup (rifle, load, optic, conditions, BDC config) in your browser so you can recall it instantly — one profile per rifle/load. <b>Export / Import JSON</b> moves profiles between devices, since they're stored per-browser. <b>DOPE PNG</b> and <b>BDC PNG</b> download card images; <b>Print</b> outputs all visible cards.</p>
+
+      <h3>The Bottom Line</h3>
+      <p>Every computed number is a starting estimate built on your inputs. Real impacts on paper always win. Confirm at distance, record what the rifle actually does in the ACTUAL / NOTES column, and true the card to your rifle, your load lot, your air, and your scope.</p>
+      <button class="solid" style="margin-top:18px" onclick="hideHelp()">Got it</button>
+    </div>
+  </div>
   <header class="no-print">
     <div>
       <h1>Range Card <span>Builder</span></h1>
       <p>Point-mass solver · G1/G7 drag · standalone edition</p>
     </div>
     <div class="toolbar">
+      <button class="ghost" onclick="showHelp()">Instructions</button>
       <button class="ghost" onclick="exportJson()">Export JSON</button>
       <button class="ghost" onclick="document.getElementById('importFile').click()">Import JSON</button>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJson(event)">
@@ -269,8 +341,8 @@
           <label class="field" id="bdcMarksWrap" style="display:none;grid-column:1/-1"><span>Circle subtensions <em>· turret unit, comma-separated</em></span><input type="text" id="bdcMarks" placeholder="0.53, 1.22, 1.91, 3.02"></label>
           <label class="field"><span>Focal plane</span>
             <select id="focal" onchange="focalChanged()">
-              <option value="ffp">FFP (first focal plane)</option>
-              <option value="sfp">SFP (second focal plane)</option>
+              <option value="ffp">First (FFP)</option>
+              <option value="sfp">Second (SFP)</option>
             </select>
           </label>
           <label class="field" id="calMagWrap" style="display:none"><span>Reticle true at <em>· ×</em></span><input type="number" id="calMag" step="0.5" min="1" value="16"></label>
@@ -582,14 +654,13 @@ function mpbrSolve(s,env,vitalIn){
 }
 
 /* ================= STATE / UI ================= */
-const $=id=>document.getElementById(id);
-const DEFAULTS={
+const $=id=>document.getElementById(id);const DEFAULTS={
   rifleName:'Remington 700 Heavy Varmint 25"', caliber:".223 Remington",
   ammoName:"Australian Outback 69gr SMK", gr:69, bc:0.301, model:"G1", mv:2959,
   scopeName:"Bushnell Match Pro 6-24x50", hob:2.0, zero:100,
   temp:90, alt:10, rh:70, wind:10, clock:3,
   pMode:"alt", stn:29.92, incline:0,
-  start:50, end:300, step:50, unit:"MIL", click:0.1, tof:false, graphOn:true,
+  start:50, end:300, step:50, unit:"MIL", click:0.1, tof:false, graphOn:false,
   bdcOn:true, bdcIncr:0.5, bdcCount:12, focal:"ffp", calMag:16, curMag:16,
   bdcType:"even", bdcMarks:""
 };
@@ -966,6 +1037,8 @@ function deleteProfile(){
   localStorage.setItem(LS,JSON.stringify(p));
   refreshProfileList();
 }
+function showHelp(){$("helpOverlay").classList.add("show");}
+function hideHelp(){$("helpOverlay").classList.remove("show");}
 function exportJson(){
   const blob=new Blob([JSON.stringify({current:readState(),profiles:getProfiles()},null,2)],{type:"application/json"});
   const a=document.createElement("a");
