@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Range Card Builder</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14161A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Range Card">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>
   :root {
     --ink:#14161A; --panel:#1E2124; --edge:#2C3034; --card:#F2EFE6;
@@ -1181,6 +1188,13 @@ document.querySelectorAll("#inputs input, #inputs select").forEach(el=>{
   el.addEventListener("input",recalc);
 });
 recalc();
+
+/* ================= PWA ================= */
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("service-worker.js").catch(()=>{ /* app works fine without offline cache */ });
+  });
+}
 </script>
 </body>
 </html>
