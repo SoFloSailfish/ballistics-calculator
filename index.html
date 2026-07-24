@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Range Card Builder</title>
+<title>South Ridge Ballistics</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#14161A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Range Card">
+<meta name="apple-mobile-web-app-title" content="South Ridge">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>
@@ -57,6 +57,23 @@
   .help-close {
     position:sticky; top:0; float:right; margin:-8px -8px 0 0;
   }
+  .ac-readout {
+    background:#15181B; border:1px solid var(--amber); border-radius:6px;
+    padding:14px 12px; text-align:center; margin:2px 0 6px;
+  }
+  .ac-clicks {
+    font-family:var(--mono); font-size:34px; font-weight:700; color:var(--amber);
+    line-height:1.05; letter-spacing:-0.01em;
+  }
+  .ac-clicks small { font-size:13px; letter-spacing:0.16em; font-weight:600; }
+  .ac-dir {
+    font-size:17px; font-weight:800; letter-spacing:0.22em; color:var(--text); margin-top:3px;
+  }
+  .ac-val {
+    font-family:var(--mono); font-size:12px; color:var(--dim); margin-top:5px;
+    border-top:1px solid var(--edge); padding-top:6px;
+  }
+  .ac-none { font-size:20px; font-weight:800; letter-spacing:0.18em; color:var(--olive); }
   header {
     display:flex; align-items:baseline; justify-content:space-between;
     flex-wrap:wrap; gap:8px; margin-bottom:18px;
@@ -64,6 +81,15 @@
   }
   h1 { margin:0; font-size:20px; letter-spacing:.18em; text-transform:uppercase; font-weight:800; }
   h1 span { color:var(--amber); }
+  .brand { display:flex; align-items:center; gap:14px; }
+  .brand-mark {
+    width:52px; height:52px; border-radius:50%; flex-shrink:0;
+    border:1px solid rgba(217,164,65,0.45);
+  }
+  @media (max-width:520px){
+    h1 { font-size:16px; letter-spacing:.14em; }
+    .brand-mark { width:42px; height:42px; }
+  }
   header p { margin:4px 0 0; font-size:12px; color:var(--dim); }
   .toolbar { display:flex; gap:8px; flex-wrap:wrap; }
   button {
@@ -156,7 +182,7 @@
   <div class="help-overlay no-print" id="helpOverlay" onclick="if(event.target===this)hideHelp()">
     <div class="help-box">
       <button class="ghost help-close" onclick="hideHelp()">Close</button>
-      <h2>Range Card Builder — Instructions</h2>
+      <h2>South Ridge Ballistics — Instructions</h2>
       <p class="lead">A point-mass ballistics solver that builds printable DOPE and BDC reticle cards. Fill in the panels on the left; the cards update live. Everything runs in your browser — nothing is uploaded.</p>
 
       <h3>Getting Started</h3>
@@ -179,6 +205,10 @@
       <h3>Max Point Blank Range (MPBR)</h3>
       <p>Enter your target's <b>vital zone size</b> in inches (≈3–4" for prairie dogs, 8" for coyote/deer vitals) and press <b>Compute</b>. The tool finds the zero that keeps the bullet inside that zone as far as possible, and reports the resulting zero, the 100-yd sight-in height, and the max point blank range — the farthest you can hold dead center without missing high or low. <b>Use This Zero</b> applies it to your setup.</p>
 
+      <h3>Ammo Change</h3>
+      <p>Switching loads without re-zeroing from scratch. Pick the load you're changing to (from the factory list, or <b>Custom / enter manually</b> for anything not in it), set the <b>new zero distance</b> you want, and press <b>Compute</b>. The tool reports how many clicks to dial and which direction. <b>Switch To This Load</b> then applies it to your whole setup.</p>
+      <div class="tip">This is the <b>ballistic</b> difference between the two loads — it gets you on paper. A different bullet can also shift point of impact in your particular barrel for reasons no calculator can predict, so always confirm with a group.</div>
+
       <h3>Card Range &amp; Trajectory Graph</h3>
       <p><b>Start / End / Step</b> set the distances shown on the DOPE card. <b>Time of flight</b> and <b>Trajectory graph</b> are optional toggles — the graph plots bullet path vs. line of sight with your zero and max ordinate marked.</p>
 
@@ -198,9 +228,12 @@
     </div>
   </div>
   <header class="no-print">
-    <div>
-      <h1>Range Card <span>Builder</span></h1>
-      <p>Point-mass solver · G1/G7 drag · standalone edition</p>
+    <div class="brand">
+      <img src="icon-192.png" alt="" class="brand-mark" onerror="this.style.display='none'">
+      <div>
+        <h1>South Ridge <span>Ballistics</span></h1>
+        <p>Point-mass solver · G1/G7 drag · DOPE &amp; BDC range cards</p>
+      </div>
     </div>
     <div class="toolbar">
       <button class="ghost" onclick="showHelp()">Instructions</button>
@@ -318,6 +351,29 @@
           <button class="ghost" style="flex:1; display:none" id="mpbrApply" onclick="applyMpbrZero()">Use This Zero</button>
         </div>
         <p class="hint" id="mpbrHint">Finds the zero that keeps the bullet inside a vital zone (±half the size) as far as possible — hold dead center out to the MPBR, no math. Try 3–4" for prairie dogs, 8" for coyote/deer vitals.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Ammo Change</h2>
+        <p class="hint">Switching loads? This gives the elevation offset to go from your current load and zero to a new one — dial it and you should be on paper without starting over.</p>
+        <label class="field"><span>New load</span>
+          <select id="acLoad" onchange="acLoadChanged()"></select>
+        </label>
+        <div class="grid2" id="acManual" style="display:none">
+          <label class="field"><span>Bullet weight <em>· gr</em></span><input type="number" id="acGr" step="1" min="10" value="55"></label>
+          <label class="field"><span>Muzzle velocity <em>· fps</em></span><input type="number" id="acMv" step="5" min="300" value="3240"></label>
+          <label class="field"><span>Ballistic coeff.</span><input type="number" id="acBc" step="0.001" min="0.05" value="0.255"></label>
+          <label class="field"><span>Drag model</span>
+            <select id="acModel"><option>G1</option><option>G7</option></select>
+          </label>
+        </div>
+        <label class="field"><span>New zero distance <em>· yd</em></span><input type="number" id="acZero" step="25" min="10" value="200"></label>
+        <div style="display:flex; gap:8px;">
+          <button class="solid" style="flex:1" onclick="computeAmmoChange()">Compute</button>
+          <button class="ghost" style="flex:1; display:none" id="acApply" onclick="applyAmmoChange()">Switch To This Load</button>
+        </div>
+        <div id="acResult" style="display:none"></div>
+        <p class="hint" id="acHint">Pick the load you're switching to and the zero you want, then Compute.</p>
       </section>
 
       <section class="panel">
@@ -610,6 +666,33 @@ function trueSolve(s,env,yd,actualHold,unit,mode){
 
 /* Max Point Blank Range: find the zero whose max ordinate equals +vital/2,
    then the far range where the path falls below -vital/2. */
+/* Launch angle (rad) that puts this load dead-on at the given zero range.
+   Zeroing is always done on level ground, so incline is not applied here. */
+function zeroAngle(s,env,zeroYd){
+  const zeroM=zeroYd*YD;
+  let theta=0.001;
+  for(let i=0;i<6;i++){
+    const rec=integrate(theta,s,env,zeroM+1,0);
+    const at=rec[Math.round(zeroM)];
+    if(!at)break;
+    theta-=Math.atan2(at.y,zeroM);
+  }
+  return theta;
+}
+
+/* Ammo change: elevation offset from the current load/zero to a new
+   load/zero. Positive = dial UP. Same rifle, scope, and conditions. */
+function ammoChangeSolve(sCur,sNew,env,newZeroYd,unit,clickVal){
+  if(!(newZeroYd>0))return{ok:false,msg:"Enter a valid new zero distance."};
+  const thA=zeroAngle(sCur,env,sCur.zero);
+  const thB=zeroAngle(sNew,env,newZeroYd);
+  if(!isFinite(thA)||!isFinite(thB))return{ok:false,msg:"Could not solve one of the trajectories — check the load values."};
+  const dRad=thB-thA;
+  const val=(unit==="MOA")?dRad*3437.75:dRad*1000;
+  const clicks=Math.round(val/clickVal);
+  return{ok:true,val,clicks,dir:val>=0?"UP":"DOWN"};
+}
+
 function mpbrSolve(s,env,vitalIn){
   const r=vitalIn/2;
   const ordFor=zero=>{
@@ -823,6 +906,76 @@ function applyMpbrZero(){
   recalc();
   $("mpbrHint").textContent="Zero set to "+lastMpbrZero+" yd — all cards updated.";
 }
+
+/* ---------- Ammo Change ---------- */
+const AC_MANUAL="__manual__";
+function buildAcLoadList(){
+  const cal=$("caliber").value===CUSTOM?$("caliberCustom").value:$("caliber").value;
+  const loads=FACTORY_LOADS[cal]||[];
+  const prev=$("acLoad").value;
+  $("acLoad").innerHTML=
+    loads.map((l,i)=>'<option value="'+i+'">'+esc(l.name)+'</option>').join("")+
+    '<option value="'+AC_MANUAL+'">Custom / enter manually…</option>';
+  if(prev)$("acLoad").value=prev;
+  if($("acLoad").selectedIndex<0)$("acLoad").selectedIndex=0;
+  acLoadChanged();
+}
+function acLoadChanged(){
+  $("acManual").style.display=($("acLoad").value===AC_MANUAL)?"":"none";
+}
+function acNewLoad(){
+  const s=readState();
+  if($("acLoad").value===AC_MANUAL){
+    const gr=parseFloat($("acGr").value), mv=parseFloat($("acMv").value),
+          bc=parseFloat($("acBc").value), model=$("acModel").value;
+    if(![gr,mv,bc].every(v=>isFinite(v)&&v>0))return null;
+    return {name:"Custom "+gr+"gr",gr,mv,bc,model};
+  }
+  const cal=$("caliber").value===CUSTOM?$("caliberCustom").value:$("caliber").value;
+  const l=(FACTORY_LOADS[cal]||[])[parseInt($("acLoad").value)];
+  return l?{name:l.name,gr:l.gr,mv:l.mv,bc:l.bc,model:l.model}:null;
+}
+let lastAcLoad=null,lastAcZero=null;
+function computeAmmoChange(){
+  const s=readState();
+  const env=atmosphere(s.temp,s.alt,s.rh,s.pMode==="stn"?s.stn:null);
+  const hideRes=()=>{$("acResult").style.display="none";$("acApply").style.display="none";};
+  const nl=acNewLoad();
+  if(!nl){$("acHint").textContent="Enter valid bullet weight, muzzle velocity, and BC for the new load.";hideRes();return;}
+  const nz=parseFloat($("acZero").value);
+  if(!isFinite(nz)||nz<10){$("acHint").textContent="Enter a new zero distance of at least 10 yd.";hideRes();return;}
+  const sNew={...s,gr:nl.gr,mv:nl.mv,bc:nl.bc,model:nl.model,zero:nz};
+  const r=ammoChangeSolve(s,sNew,env,nz,s.unit,s.click);
+  if(!r.ok){$("acHint").textContent=r.msg;hideRes();return;}
+  lastAcLoad=nl;lastAcZero=nz;
+  const mag=Math.abs(r.clicks);
+  const arrow=r.dir==="UP"?"▲":"▼";
+  $("acResult").innerHTML='<div class="ac-readout">'+(
+    mag===0
+      ? '<div class="ac-none">NO CHANGE</div><div class="ac-val">Within half a click — your current zero carries over.</div>'
+      : '<div class="ac-clicks">'+mag+' <small>CLICK'+(mag===1?"":"S")+'</small></div>'+
+        '<div class="ac-dir">'+arrow+' '+r.dir+'</div>'+
+        '<div class="ac-val">'+Math.abs(r.val).toFixed(2)+' '+s.unit+' · '+s.click+' '+s.unit+'/click</div>'
+  )+'</div>';
+  $("acResult").style.display="";
+  $("acHint").textContent=
+    esc(s.ammoName||"current load")+" @ "+s.zero+" yd → "+nl.name+" @ "+nz+
+    " yd. Ballistic offset only — confirm on paper, since a different bullet can also shift point of impact in your barrel.";
+  $("acApply").style.display="";
+}
+function applyAmmoChange(){
+  if(!lastAcLoad)return;
+  $("ammoName").value=lastAcLoad.name;
+  $("gr").value=lastAcLoad.gr;
+  $("bc").value=lastAcLoad.bc;
+  $("model").value=lastAcLoad.model;
+  $("mv").value=lastAcLoad.mv;
+  $("zero").value=lastAcZero;
+  recalc();
+  $("acHint").textContent="Switched to "+lastAcLoad.name+" @ "+lastAcZero+" yd — all cards updated.";
+  $("acResult").style.display="none";
+  $("acApply").style.display="none";
+}
 const fmtAdj=v=>{const s=Math.abs(v)<.05?0:v;return(s<0?"−":"")+Math.abs(s).toFixed(1);};
 const fmtClicks=v=>{const c=Math.round(Math.abs(v)<.5?0:v);return(c<0?"−":"")+Math.abs(c);};
 const fmtHold=v=>v===0?"CTR":v.toFixed(1);
@@ -872,7 +1025,8 @@ function renderCard(){
   html+='</tbody></table><div class="card-foot">'+
    '<span>MAX ORD: +'+m.maxOrdIn.toFixed(1)+'" @ '+Math.round(m.maxOrdYd)+' yd</span>'+
    (m.nearZero!==null?'<span>NEAR ZERO: '+Math.round(m.nearZero)+' yd</span>':"")+
-   sonic+'<span>ELEV = dial/hold UP · negative = below zero range</span></div>';
+   sonic+'<span>ELEV = dial/hold UP · negative = below zero range</span>'+
+   '<span style="margin-left:auto;letter-spacing:.1em;opacity:.75">SOUTH RIDGE BALLISTICS</span></div>';
   $("card").innerHTML=html;
 }
 
@@ -934,7 +1088,8 @@ function renderBdc(){
    (sfp
      ?'<span>'+markLabel+' = value on the reticle; EFF HOLD = its true value at '+s.curMag+'×.</span>'
      :'<span>Hold the listed '+(custom?"circle":"reticle mark")+'; rounds strike at the paired range.</span>')+
-   '<span>CTR = center crosshair (zero). Wind at full value from '+s.clock+" o'clock.</span></div>";
+   '<span>CTR = center crosshair (zero). Wind at full value from '+s.clock+" o'clock.</span>"+
+   '<span style="margin-left:auto;letter-spacing:.1em;opacity:.75">SOUTH RIDGE BALLISTICS</span></div>';
   el.innerHTML=html;
 }
 
@@ -1003,6 +1158,7 @@ function caliberChanged(rc=true){
   $("presetWrap").style.display=loads.length?"":"none";
   $("ammoPreset").innerHTML='<option value="" disabled selected>Apply a factory load…</option>'+
     loads.map((l,i)=>'<option value="'+i+'">'+esc(l.name)+' — '+l.bc+' '+l.model+' · '+l.mv+' fps</option>').join("");
+  buildAcLoadList();
   if(rc)recalc();
 }
 function applyPreset(){
@@ -1047,9 +1203,13 @@ function deleteProfile(){
 function showHelp(){$("helpOverlay").classList.add("show");}
 function hideHelp(){$("helpOverlay").classList.remove("show");}
 function exportJson(){
-  const blob=new Blob([JSON.stringify({current:readState(),profiles:getProfiles()},null,2)],{type:"application/json"});
+  const s=readState();
+  const base=(s.rifleName||s.caliber||"profiles").trim()
+    .replace(/[^\w.-]+/g,"_").replace(/^_+|_+$/g,"").slice(0,48)||"profiles";
+  const date=new Date().toISOString().slice(0,10);
+  const blob=new Blob([JSON.stringify({current:s,profiles:getProfiles()},null,2)],{type:"application/json"});
   const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);a.download="range-card-profiles.json";a.click();
+  a.href=URL.createObjectURL(blob);a.download="southridge_"+base+"_"+date+".json";a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
 }
 function importJson(ev){
@@ -1135,7 +1295,8 @@ function downloadPng(){
     :"SUPERSONIC THROUGH "+s.end+" yd";
   const foot=['MAX ORD: +'+sum.maxOrdIn.toFixed(1)+'" @ '+Math.round(sum.maxOrdYd)+" yd"+
     (sum.nearZero!==null?"   NEAR ZERO: "+Math.round(sum.nearZero)+" yd":"")+"   "+sonic,
-    "ELEV = dial/hold UP · negative = below zero range"];
+    "ELEV = dial/hold UP · negative = below zero range",
+    "SOUTH RIDGE BALLISTICS"];
   drawPng("DATA ON PREVIOUS ENGAGEMENT",meta,cols,res.rows,foot,
     "dope-card-"+(s.caliber||"rifle").replace(/[^\w.-]+/g,"_")+"-"+s.zero+"yd-zero.png");
 }
@@ -1175,7 +1336,8 @@ function downloadBdcPng(){
   drawPng("BDC / RETICLE HOLDS"+magSuffix,meta,cols,bdc,
     [sfp?markLabel+" = value on reticle; EFF HOLD = true value at "+s.curMag+"×."
         :"Hold the listed "+(custom?"circle":"reticle mark")+"; rounds strike at the paired range.",
-     "CTR = center crosshair (zero). Wind full value from "+s.clock+" o'clock."],
+     "CTR = center crosshair (zero). Wind full value from "+s.clock+" o'clock.",
+     "SOUTH RIDGE BALLISTICS"],
     "bdc-card-"+(s.caliber||"rifle").replace(/[^\w.-]+/g,"_")+".png");
 }
 
@@ -1184,7 +1346,7 @@ buildCaliberSelect();
 writeState(DEFAULTS);
 refreshProfileList();
 document.querySelectorAll("#inputs input, #inputs select").forEach(el=>{
-  if(["profileSelect","profileName","ammoPreset","caliber","importFile","unit","pMode","trueRange","trueHold","trueMode","mpbrVital","focal","bdcType"].includes(el.id))return;
+  if(["profileSelect","profileName","ammoPreset","caliber","importFile","unit","pMode","trueRange","trueHold","trueMode","mpbrVital","focal","bdcType","acLoad","acGr","acMv","acBc","acModel","acZero"].includes(el.id))return;
   el.addEventListener("input",recalc);
 });
 recalc();
